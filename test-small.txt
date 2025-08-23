@@ -1,0 +1,5 @@
+// Small test file for DeepSeek MCP Bridge testing
+function testFunction() {
+  console.log("This is a test file");
+  return "success";
+}

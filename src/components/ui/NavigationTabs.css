@@ -1,0 +1,52 @@
+/* NavigationTabs Component Styles */
+
+/* Hide scrollbars for responsive navigation */
+.navigation-tabs-container {
+  -webkit-overflow-scrolling: touch;
+}
+
+.navigation-tabs-container::-webkit-scrollbar {
+  display: none;
+}
+
+.navigation-tabs-container {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Focus states for accessibility */
+.navigation-tab:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Touch targets for mobile */
+@media (max-width: 640px) {
+  .navigation-tab {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+}
+
+/* Animation for smooth transitions */
+.navigation-tab {
+  transition: all 0.15s ease-in-out;
+}
+
+.navigation-tab:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+/* Badge pulse animation */
+.navigation-badge {
+  animation: badge-pulse 2s infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "name": "fantasy-football-analyzer",
+  "version": "1.0.0",
+  "description": "Advanced Fantasy Football Draft Tool with AI Analysis",
+  "main": "src/index.tsx",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --project tsconfig.prod.json --noEmit && vite build",
+    "build:prod": "vite build --mode production",
+    "build:ci": "vite build --mode production --logLevel warn",
+    "preview": "vite preview",
+    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 50",
+    "lint:fix": "eslint src --ext ts,tsx --fix",
+    "typecheck": "tsc --noEmit",
+    "typecheck:prod": "tsc --project tsconfig.prod.json --noEmit",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:ci": "vitest run --coverage",
+    "analyze": "npx vite-bundle-analyzer",
+    "clean": "rm -rf dist node_modules/.vite",
+    "deploy:preview": "npm run build:prod && npm run preview"
+  },
+  "dependencies": {
+    "@playwright/test": "^1.55.0",
+    "lucide-react": "^0.294.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "recharts": "^2.8.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
+    "@typescript-eslint/eslint-plugin": "^6.10.0",
+    "@typescript-eslint/parser": "^6.10.0",
+    "@vitejs/plugin-react": "^4.1.1",
+    "autoprefixer": "^10.4.16",
+    "eslint": "^8.53.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.4",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.3.5",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.0",
+    "vite-bundle-analyzer": "^0.7.0",
+    "vitest": "^0.34.6"
+  },
+  "type": "module",
+  "keywords": [
+    "fantasy-football",
+    "react",
+    "typescript",
+    "draft-analyzer",
+    "sports-analytics"
+  ],
+  "author": "Fantasy Football Analyzer Team",
+  "license": "MIT"
+}
