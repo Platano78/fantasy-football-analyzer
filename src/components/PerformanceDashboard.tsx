@@ -11,8 +11,6 @@ import {
   Clock, 
   TrendingUp, 
   TrendingDown,
-  AlertTriangle,
-  CheckCircle,
   BarChart3,
   Cpu,
   HardDrive,
@@ -87,16 +85,7 @@ const MetricCard = memo(({
 MetricCard.displayName = 'MetricCard';
 
 // Web Vitals component
-const WebVitalsSection = memo(() => {
-  const [vitals, setVitals] = useState(performanceMonitor.getWebVitals());
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setVitals(performanceMonitor.getWebVitals());
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, []);
+const WebVitalsSection = memo(({ vitals }: { vitals: ReturnType<typeof performanceMonitor.getWebVitals> }) => {
 
   const getVitalStatus = (rating: string) => {
     switch (rating) {
@@ -213,16 +202,7 @@ const CacheSection = memo(() => {
 CacheSection.displayName = 'CacheSection';
 
 // Performance metrics section
-const MetricsSection = memo(() => {
-  const [summary, setSummary] = useState(performanceMonitor.getSummary());
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSummary(performanceMonitor.getSummary());
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, []);
+const MetricsSection = memo(({ summary }: { summary: ReturnType<typeof performanceMonitor.getSummary> }) => {
 
   const getMetricStatus = (metricName: string, avgValue: number) => {
     const thresholds = {
@@ -280,7 +260,7 @@ MetricsSection.displayName = 'MetricsSection';
 
 // Browser information section
 const BrowserInfoSection = memo(() => {
-  const [browserInfo, setBrowserInfo] = useState(() => {
+  const [browserInfo] = useState(() => {
     if (typeof navigator === 'undefined') return null;
     
     return {
@@ -347,6 +327,23 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = memo(({
   isOpen, 
   onClose 
 }) => {
+  // Consolidated state for all performance metrics
+  const [vitals, setVitals] = useState(performanceMonitor.getWebVitals());
+  const [summary, setSummary] = useState(performanceMonitor.getSummary());
+
+  // Single consolidated interval for all data updates
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const updateAllMetrics = () => {
+      setVitals(performanceMonitor.getWebVitals());
+      setSummary(performanceMonitor.getSummary());
+    };
+
+    const interval = setInterval(updateAllMetrics, 2000);
+    return () => clearInterval(interval);
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleExportData = () => {
@@ -400,8 +397,8 @@ export const PerformanceDashboard: React.FC<PerformanceDashboardProps> = memo(({
 
         {/* Content */}
         <div className="p-6 space-y-8">
-          <WebVitalsSection />
-          <MetricsSection />
+          <WebVitalsSection vitals={vitals} />
+          <MetricsSection summary={summary} />
           <CacheSection />
           <BrowserInfoSection />
         </div>

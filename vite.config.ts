@@ -85,13 +85,13 @@ export default defineConfig(({ mode }) => {
       minify: mode === 'production' ? 'esbuild' : false,
       target: 'es2020',
       // Optimize chunk sizes for better caching
-      chunkSizeWarningLimit: 500,
+      chunkSizeWarningLimit: 1000,
       // Enable CSS code splitting for better caching
       cssCodeSplit: true,
       // Clean dist folder
       emptyOutDir: true,
       // Optimize asset inlining threshold
-      assetsInlineLimit: 2048,
+      assetsInlineLimit: 4096,
       // Enable compression reporting
       reportCompressedSize: true,
       // Output options for better tree shaking
