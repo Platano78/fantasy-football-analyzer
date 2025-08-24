@@ -77,7 +77,7 @@ class LocalGeminiService {
     backoffMultiplier: 1.5
   };
 
-  constructor(baseUrl = 'http://localhost:3001') {
+  constructor(baseUrl = import.meta.env.PROD ? '' : 'http://localhost:3001') {
     this.baseUrl = baseUrl;
     this.wsUrl = baseUrl.replace('http', 'ws') + '/ws';
     this.status = {
