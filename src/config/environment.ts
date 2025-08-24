@@ -134,15 +134,15 @@ const getEnvironmentDefaults = (env: Environment): Partial<EnvironmentConfig> =>
         LOCAL_GEMINI_ENABLED: false, // Disable local in production by default
         BROWSER_MCP_ENABLED: true,
         CACHE_DEFAULT_TTL: 15 * 60 * 1000, // 15 minutes
-        PERFORMANCE_MONITORING_ENABLED: true,
-        RUM_ENABLED: true,
+        PERFORMANCE_MONITORING_ENABLED: false, // Disable monitoring to prevent console errors
+        RUM_ENABLED: false, // Disable RUM to prevent console errors
         FEATURES: {
           ESPN_API: true,
           BROWSER_MCP: true,
-          LOCAL_GEMINI: false,
-          CLOUD_GEMINI: true,
-          AI_COACHING: true,
-          PERFORMANCE_MONITORING: true,
+          LOCAL_GEMINI: false, // CRITICAL: Disable local Gemini in production
+          CLOUD_GEMINI: false, // Disable cloud Gemini for now to prevent API calls
+          AI_COACHING: false, // Disable AI coaching for now
+          PERFORMANCE_MONITORING: false,
           REAL_TIME_DATA: true,
           MOBILE_OPTIMIZATION: true,
           DARK_MODE: true,
