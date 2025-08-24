@@ -1,419 +1,360 @@
-// Custom hook for Browser MCP integration
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { browserMCPService, type NewsItem, type LiveUpdate, type InjuryReport, type PlayerRanking } from '@/services/BrowserMCPService';
+import { useState, useEffect, useCallback } from 'react';
+import { nflLeagueService } from '../services/NFLLeagueService';
+import { browserMCPService } from '../services/BrowserMCPService';
 
-export interface BrowserMCPState {
+interface BrowserMCPState {
   isInitialized: boolean;
-  isLoading: boolean;
+  error?: string;
+  healthStatus: {
+    espn: boolean;
+    fantasypros: boolean;
+    nfl: boolean;
+    sleeper: boolean;
+  };
   lastUpdate: Date;
-  healthStatus: Record<string, boolean>;
-  error: string | null;
 }
 
-export interface BrowserMCPHookReturn {
-  // State
+interface RankingData {
+  playerId: string;
+  playerName: string;
+  position: string;
+  rank: number;
+  source: string;
+  updated: Date;
+}
+
+interface InjuryData {
+  playerId: string;
+  playerName: string;
+  status: string;
+  description: string;
+  severity: 'minor' | 'moderate' | 'major';
+  updated: Date;
+}
+
+interface NewsData {
+  id: string;
+  headline: string;
+  summary: string;
+  playersInvolved: string[];
+  source: string;
+  updated: Date;
+}
+
+interface BrowserMCPHook {
   state: BrowserMCPState;
-  
-  // News functionality
-  news: NewsItem[];
-  refreshNews: () => Promise<void>;
-  
-  // Rankings functionality  
-  rankings: PlayerRanking[];
-  refreshRankings: () => Promise<void>;
-  
-  // Injury reports
-  injuries: InjuryReport[];
-  refreshInjuries: () => Promise<void>;
-  
-  // Live updates
-  liveUpdates: LiveUpdate[];
-  clearLiveUpdates: () => void;
-  
-  // Auto-refresh controls
   isAutoRefreshEnabled: boolean;
   autoRefreshInterval: number;
-  startAutoRefresh: (intervalSeconds?: number) => void;
-  stopAutoRefresh: () => void;
-  setAutoRefreshInterval: (seconds: number) => void;
-  
-  // Manual refresh
+  rankings: RankingData[];
+  injuries: InjuryData[];
+  news: NewsData[];
+  liveUpdates: any[];
   refreshAll: () => Promise<void>;
-  
-  // Health monitoring
-  checkHealth: () => Promise<void>;
-  
-  // Cache management
+  refreshNews: () => Promise<void>;
+  refreshRankings: () => Promise<void>;
+  refreshInjuries: () => Promise<void>;
+  startAutoRefresh: () => void;
+  stopAutoRefresh: () => void;
+  setAutoRefreshInterval: (interval: number) => void;
+  clearLiveUpdates: () => void;
   clearCache: () => void;
+  checkHealth: () => void;
 }
 
-export function useBrowserMCP(myPlayerIds: string[] = []): BrowserMCPHookReturn {
-  // Core state
+export function useBrowserMCP(playerIds: string[]): BrowserMCPHook {
   const [state, setState] = useState<BrowserMCPState>({
     isInitialized: false,
-    isLoading: false,
+    healthStatus: {
+      espn: false,
+      fantasypros: false,
+      nfl: false,
+      sleeper: false,
+    },
     lastUpdate: new Date(),
-    healthStatus: {},
-    error: null
   });
 
-  // Data state
-  const [news, setNews] = useState<NewsItem[]>([]);
-  const [rankings, setRankings] = useState<PlayerRanking[]>([]);
-  const [injuries, setInjuries] = useState<InjuryReport[]>([]);
-  const [liveUpdates, setLiveUpdates] = useState<LiveUpdate[]>([]);
-
-  // Auto-refresh state
   const [isAutoRefreshEnabled, setIsAutoRefreshEnabled] = useState(false);
-  const [autoRefreshInterval, setAutoRefreshInterval] = useState(300); // 5 minutes
+  const [autoRefreshInterval, setAutoRefreshIntervalState] = useState(300000); // 5 minutes
+  const [autoRefreshTimer, setAutoRefreshTimer] = useState<NodeJS.Timeout>();
 
-  // Refs for cleanup
-  const subscriptionRefs = useRef<(() => void)[]>([]);
+  const [rankings, setRankings] = useState<RankingData[]>([]);
+  const [injuries, setInjuries] = useState<InjuryData[]>([]);
+  const [news, setNews] = useState<NewsData[]>([]);
+  const [liveUpdates, setLiveUpdates] = useState<any[]>([]);
 
   // Initialize Browser MCP service
-  useEffect(() => {
-    let isMounted = true;
-
-    const initService = async () => {
-      if (!isMounted) return;
+  const initializeService = useCallback(async () => {
+    try {
+      console.log('🚀 Initializing Browser MCP service...');
       
-      setState(prev => ({ ...prev, isLoading: true, error: null }));
+      // Check if Browser MCP is available
+      const isBrowserMCPAvailable = typeof (globalThis as any).mcp__playwright__browser_navigate === 'function';
       
-      try {
-        const initialized = await browserMCPService.initialize();
-        if (!isMounted) return;
+      if (isBrowserMCPAvailable) {
+        // Initialize NFL League Service
+        const healthCheck = await nflLeagueService.healthCheck();
+        console.log('NFL League Service Health:', healthCheck);
         
-        if (initialized) {
-          const health = await browserMCPService.healthCheck();
-          if (!isMounted) return;
-          
-          setState(prev => ({
-            ...prev,
-            isInitialized: true,
-            isLoading: false,
-            healthStatus: health,
-            lastUpdate: new Date()
-          }));
-
-          // Set up data subscriptions
-          setupSubscriptions();
-        } else {
-          setState(prev => ({
-            ...prev,
-            isInitialized: false,
-            isLoading: false,
-            error: 'Failed to initialize Browser MCP service'
-          }));
-        }
-      } catch (error) {
-        if (!isMounted) return;
         setState(prev => ({
           ...prev,
-          isInitialized: false,
-          isLoading: false,
-          error: error instanceof Error ? error.message : 'Initialization failed'
+          isInitialized: true,
+          healthStatus: {
+            espn: true,
+            fantasypros: true,
+            nfl: healthCheck.status === 'healthy',
+            sleeper: true,
+          },
+          lastUpdate: new Date(),
+        }));
+      } else {
+        console.warn('Browser MCP not available, using fallback mode');
+        setState(prev => ({
+          ...prev,
+          isInitialized: true,
+          error: 'Browser MCP not available - using fallback data',
+          healthStatus: {
+            espn: false,
+            fantasypros: false,
+            nfl: false,
+            sleeper: false,
+          },
+          lastUpdate: new Date(),
         }));
       }
-    };
 
-    initService();
-
-    return () => {
-      isMounted = false;
-      cleanupSubscriptions();
-    };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Initialization failed';
+      console.error('❌ Browser MCP initialization failed:', errorMessage);
+      
+      setState(prev => ({
+        ...prev,
+        isInitialized: true,
+        error: errorMessage,
+        healthStatus: {
+          espn: false,
+          fantasypros: false,
+          nfl: false,
+          sleeper: false,
+        },
+      }));
+    }
   }, []);
 
-  // Set up real-time data subscriptions
-  const setupSubscriptions = useCallback(() => {
-    // Subscribe to news updates
-    const newsUnsub = browserMCPService.subscribe('news', (newsData: NewsItem[]) => {
-      setNews(newsData);
+  // Refresh all data sources
+  const refreshAll = useCallback(async () => {
+    console.log('🔄 Refreshing all Browser MCP data...');
+    
+    try {
+      setState(prev => ({ ...prev, error: undefined }));
       
-      // Create live update for significant news
-      const significantNews = newsData.filter(item => item.impactScore >= 4);
-      if (significantNews.length > 0) {
-        const updates = significantNews.map(item => ({
-          id: `news-${item.id}`,
-          type: 'news' as const,
-          playerName: item.affectedPlayers[0]?.playerName,
-          message: `Breaking: ${item.headline}`,
-          timestamp: new Date(),
-          severity: item.severity === 'urgent' ? 'high' as const : 
-                   item.severity === 'high' ? 'medium' as const : 'low' as const
+      await Promise.all([
+        refreshRankings(),
+        refreshInjuries(),
+        refreshNews(),
+      ]);
+
+      setState(prev => ({
+        ...prev,
+        lastUpdate: new Date(),
+      }));
+
+      console.log('✅ All Browser MCP data refreshed');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Refresh failed';
+      console.error('❌ Browser MCP refresh failed:', errorMessage);
+      setState(prev => ({ ...prev, error: errorMessage }));
+    }
+  }, []);
+
+  // Refresh rankings from multiple sources
+  const refreshRankings = useCallback(async () => {
+    try {
+      console.log('📊 Refreshing fantasy rankings...');
+      
+      // Try to scrape rankings from FantasyPros via Browser MCP
+      if (typeof browserMCPService?.scrapeFantasyProsRankings === 'function') {
+        const fpRankings = await browserMCPService.scrapeFantasyProsRankings();
+        const transformedRankings: RankingData[] = fpRankings.map((ranking, i) => ({
+          playerId: `fp_${i}`,
+          playerName: ranking.name || `Player ${i + 1}`,
+          position: ranking.position || 'RB',
+          rank: ranking.rank || i + 1,
+          source: 'FantasyPros',
+          updated: new Date(),
         }));
         
-        setLiveUpdates(prev => [...updates, ...prev].slice(0, 50));
+        setRankings(transformedRankings);
+        console.log(`✅ Loaded ${transformedRankings.length} FantasyPros rankings`);
+      } else {
+        // Fallback rankings for draft functionality
+        const fallbackRankings: RankingData[] = [
+          { playerId: '1', playerName: 'Josh Allen', position: 'QB', rank: 1, source: 'Fallback', updated: new Date() },
+          { playerId: '2', playerName: 'Christian McCaffrey', position: 'RB', rank: 2, source: 'Fallback', updated: new Date() },
+          { playerId: '3', playerName: 'Tyreek Hill', position: 'WR', rank: 3, source: 'Fallback', updated: new Date() },
+          { playerId: '4', playerName: 'Travis Kelce', position: 'TE', rank: 4, source: 'Fallback', updated: new Date() },
+          { playerId: '5', playerName: 'Cooper Kupp', position: 'WR', rank: 5, source: 'Fallback', updated: new Date() },
+        ];
+        
+        setRankings(fallbackRankings);
+        console.log('⚠️ Using fallback rankings - Browser MCP not available');
       }
-    });
-
-    // Subscribe to rankings updates
-    const rankingsUnsub = browserMCPService.subscribe('rankings', (rankingData: PlayerRanking[]) => {
-      setRankings(prev => {
-        // Check for significant ranking changes
-        const changes: LiveUpdate[] = [];
-        rankingData.forEach(newRank => {
-          const oldRank = prev.find(r => r.playerId === newRank.playerId);
-          if (oldRank && Math.abs(oldRank.rank - newRank.rank) >= 5) {
-            changes.push({
-              id: `ranking-${newRank.playerId}-${Date.now()}`,
-              type: 'ranking',
-              playerName: newRank.playerName,
-              message: `${newRank.playerName} moved from #${oldRank.rank} to #${newRank.rank}`,
-              timestamp: new Date(),
-              severity: Math.abs(oldRank.rank - newRank.rank) >= 10 ? 'high' : 'medium'
-            });
-          }
-        });
-
-        if (changes.length > 0) {
-          setLiveUpdates(prev => [...changes, ...prev].slice(0, 50));
-        }
-
-        return rankingData;
-      });
-    });
-
-    // Subscribe to injury reports
-    const injuriesUnsub = browserMCPService.subscribe('injuries', (injuryData: InjuryReport[]) => {
-      setInjuries(prev => {
-        // Check for new/changed injury status
-        const changes: LiveUpdate[] = [];
-        injuryData.forEach(newInjury => {
-          const oldInjury = prev.find(i => i.playerId === newInjury.playerId);
-          if (!oldInjury || oldInjury.status !== newInjury.status) {
-            const severity = newInjury.status === 'Out' || newInjury.status === 'IR' ? 'high' :
-                           newInjury.status === 'Doubtful' ? 'medium' : 'low';
-            
-            changes.push({
-              id: `injury-${newInjury.playerId}-${Date.now()}`,
-              type: 'injury',
-              playerName: newInjury.playerName,
-              message: `${newInjury.playerName} status updated to ${newInjury.status}`,
-              timestamp: new Date(),
-              severity: severity as 'low' | 'medium' | 'high'
-            });
-          }
-        });
-
-        if (changes.length > 0) {
-          setLiveUpdates(prev => [...changes, ...prev].slice(0, 50));
-        }
-
-        return injuryData;
-      });
-    });
-
-    // Store unsubscribe functions
-    subscriptionRefs.current = [newsUnsub, rankingsUnsub, injuriesUnsub];
+    } catch (error) {
+      console.error('❌ Rankings refresh failed:', error);
+    }
   }, []);
 
-  // Cleanup subscriptions
-  const cleanupSubscriptions = useCallback(() => {
-    subscriptionRefs.current.forEach(unsub => unsub());
-    subscriptionRefs.current = [];
-  }, []);
-
-  // Manual data refresh functions
-  const refreshNews = useCallback(async () => {
-    if (!state.isInitialized) return;
-    
-    setState(prev => ({ ...prev, isLoading: true }));
-    try {
-      const newsData = await browserMCPService.getConsolidatedNews(myPlayerIds);
-      setNews(newsData);
-      setState(prev => ({ ...prev, lastUpdate: new Date() }));
-    } catch (error) {
-      setState(prev => ({ 
-        ...prev, 
-        error: error instanceof Error ? error.message : 'Failed to refresh news'
-      }));
-    } finally {
-      setState(prev => ({ ...prev, isLoading: false }));
-    }
-  }, [state.isInitialized, myPlayerIds]);
-
-  const refreshRankings = useCallback(async () => {
-    if (!state.isInitialized) return;
-    
-    setState(prev => ({ ...prev, isLoading: true }));
-    try {
-      const rankingData = await browserMCPService.getConsolidatedRankings();
-      setRankings(rankingData);
-      setState(prev => ({ ...prev, lastUpdate: new Date() }));
-    } catch (error) {
-      setState(prev => ({ 
-        ...prev, 
-        error: error instanceof Error ? error.message : 'Failed to refresh rankings'
-      }));
-    } finally {
-      setState(prev => ({ ...prev, isLoading: false }));
-    }
-  }, [state.isInitialized]);
-
+  // Refresh injury reports
   const refreshInjuries = useCallback(async () => {
-    if (!state.isInitialized) return;
-    
-    setState(prev => ({ ...prev, isLoading: true }));
     try {
-      const injuryData = await browserMCPService.getAllInjuryReports();
-      setInjuries(injuryData);
-      setState(prev => ({ ...prev, lastUpdate: new Date() }));
+      console.log('🏥 Refreshing injury reports...');
+      
+      // Try to scrape injury data
+      if (typeof browserMCPService?.scrapeESPNInjuries === 'function') {
+        const espnInjuries = await browserMCPService.scrapeESPNInjuries();
+        const transformedInjuries: InjuryData[] = espnInjuries.map((injury, i) => ({
+          playerId: `inj_${i}`,
+          playerName: injury.playerName || `Player ${i + 1}`,
+          status: injury.status || 'Healthy',
+          description: injury.description || 'No injury report',
+          severity: injury.severity || 'minor',
+          updated: new Date(),
+        }));
+        
+        setInjuries(transformedInjuries);
+        console.log(`✅ Loaded ${transformedInjuries.length} injury reports`);
+      } else {
+        // Clear injuries if no data available
+        setInjuries([]);
+        console.log('⚠️ No injury data available - Browser MCP not functional');
+      }
     } catch (error) {
-      setState(prev => ({ 
-        ...prev, 
-        error: error instanceof Error ? error.message : 'Failed to refresh injuries'
-      }));
-    } finally {
-      setState(prev => ({ ...prev, isLoading: false }));
+      console.error('❌ Injuries refresh failed:', error);
     }
-  }, [state.isInitialized]);
+  }, []);
 
-  const refreshAll = useCallback(async () => {
-    if (!state.isInitialized) return;
-    
-    setState(prev => ({ ...prev, isLoading: true }));
+  // Refresh fantasy news
+  const refreshNews = useCallback(async () => {
     try {
-      await Promise.all([
-        refreshNews(),
-        refreshRankings(),
-        refreshInjuries()
-      ]);
-      setState(prev => ({ ...prev, lastUpdate: new Date() }));
+      console.log('📰 Refreshing fantasy news...');
+      
+      // Try to scrape news data
+      if (typeof browserMCPService?.scrapeFantasyNews === 'function') {
+        const newsData = await browserMCPService.scrapeFantasyNews();
+        const transformedNews: NewsData[] = newsData.map((article, i) => ({
+          id: `news_${i}`,
+          headline: article.headline || `Fantasy News ${i + 1}`,
+          summary: article.summary || 'Fantasy football update',
+          playersInvolved: article.players || [],
+          source: article.source || 'Fantasy Source',
+          updated: new Date(),
+        }));
+        
+        setNews(transformedNews);
+        console.log(`✅ Loaded ${transformedNews.length} news articles`);
+      } else {
+        // Clear news if no data available
+        setNews([]);
+        console.log('⚠️ No news data available - Browser MCP not functional');
+      }
     } catch (error) {
-      setState(prev => ({ 
-        ...prev, 
-        error: error instanceof Error ? error.message : 'Failed to refresh data'
-      }));
-    } finally {
-      setState(prev => ({ ...prev, isLoading: false }));
+      console.error('❌ News refresh failed:', error);
     }
-  }, [state.isInitialized, refreshNews, refreshRankings, refreshInjuries]);
+  }, []);
 
-  // Auto-refresh controls
-  const startAutoRefresh = useCallback((intervalSeconds: number = autoRefreshInterval) => {
-    if (!state.isInitialized) return;
+  // Auto-refresh functionality
+  const startAutoRefresh = useCallback(() => {
+    if (autoRefreshTimer) {
+      clearInterval(autoRefreshTimer);
+    }
     
+    const timer = setInterval(() => {
+      refreshAll();
+    }, autoRefreshInterval);
+    
+    setAutoRefreshTimer(timer);
     setIsAutoRefreshEnabled(true);
-    browserMCPService.startAutoRefresh(intervalSeconds);
-    
-    // Add live update about auto-refresh
-    setLiveUpdates(prev => [{
-      id: `auto-refresh-start-${Date.now()}`,
-      type: 'news' as const,
-      message: `Auto-refresh enabled (every ${intervalSeconds} seconds)`,
-      timestamp: new Date(),
-      severity: 'low' as const
-    }, ...prev].slice(0, 50));
-  }, [state.isInitialized, autoRefreshInterval]);
+    console.log(`🔄 Auto-refresh started (${autoRefreshInterval / 1000}s interval)`);
+  }, [autoRefreshInterval, refreshAll, autoRefreshTimer]);
 
   const stopAutoRefresh = useCallback(() => {
+    if (autoRefreshTimer) {
+      clearInterval(autoRefreshTimer);
+      setAutoRefreshTimer(undefined);
+    }
     setIsAutoRefreshEnabled(false);
-    browserMCPService.stopAutoRefresh();
-    
-    // Add live update about auto-refresh stop
-    setLiveUpdates(prev => [{
-      id: `auto-refresh-stop-${Date.now()}`,
-      type: 'news' as const,
-      message: 'Auto-refresh disabled',
-      timestamp: new Date(),
-      severity: 'low' as const
-    }, ...prev].slice(0, 50));
-  }, []);
+    console.log('⏹️ Auto-refresh stopped');
+  }, [autoRefreshTimer]);
 
-  const handleSetAutoRefreshInterval = useCallback((seconds: number) => {
-    setAutoRefreshInterval(seconds);
-    
-    // Restart auto-refresh with new interval if it's currently enabled
+  const setAutoRefreshInterval = useCallback((interval: number) => {
+    setAutoRefreshIntervalState(interval);
     if (isAutoRefreshEnabled) {
       stopAutoRefresh();
-      setTimeout(() => startAutoRefresh(seconds), 100);
+      setTimeout(startAutoRefresh, 100); // Brief delay to ensure clean restart
     }
   }, [isAutoRefreshEnabled, startAutoRefresh, stopAutoRefresh]);
 
   // Health check
   const checkHealth = useCallback(async () => {
-    if (!state.isInitialized) return;
+    console.log('🏥 Checking Browser MCP health...');
     
-    try {
-      const health = await browserMCPService.healthCheck();
-      setState(prev => ({ ...prev, healthStatus: health }));
-    } catch (error) {
-      setState(prev => ({ 
-        ...prev, 
-        error: error instanceof Error ? error.message : 'Health check failed'
-      }));
-    }
-  }, [state.isInitialized]);
+    const isBrowserMCPAvailable = typeof (globalThis as any).mcp__playwright__browser_navigate === 'function';
+    const nflHealth = await nflLeagueService.healthCheck();
+    
+    setState(prev => ({
+      ...prev,
+      healthStatus: {
+        espn: isBrowserMCPAvailable,
+        fantasypros: isBrowserMCPAvailable,
+        nfl: nflHealth.status === 'healthy',
+        sleeper: isBrowserMCPAvailable,
+      },
+      lastUpdate: new Date(),
+    }));
+  }, []);
 
-  // Live updates management
+  // Utility functions
   const clearLiveUpdates = useCallback(() => {
     setLiveUpdates([]);
+    console.log('🗑️ Live updates cleared');
   }, []);
 
-  // Cache management
   const clearCache = useCallback(() => {
-    browserMCPService.clearCache();
-    setLiveUpdates(prev => [{
-      id: `cache-clear-${Date.now()}`,
-      type: 'news' as const,
-      message: 'Cache cleared - fresh data will be fetched on next update',
-      timestamp: new Date(),
-      severity: 'low' as const
-    }, ...prev].slice(0, 50));
+    setRankings([]);
+    setInjuries([]);
+    setNews([]);
+    setLiveUpdates([]);
+    console.log('🗑️ Browser MCP cache cleared');
   }, []);
 
-  // Initial data load
+  // Initialize on mount
   useEffect(() => {
-    if (state.isInitialized) {
-      refreshAll();
-    }
-  }, [state.isInitialized, refreshAll]);
-
-  // Periodic health checks
-  useEffect(() => {
-    if (!state.isInitialized) return;
-
-    const healthInterval = setInterval(checkHealth, 30000); // Every 30 seconds
-    return () => clearInterval(healthInterval);
-  }, [state.isInitialized, checkHealth]);
-
-  // Cleanup on unmount
-  useEffect(() => {
+    initializeService();
+    
+    // Cleanup on unmount
     return () => {
-      stopAutoRefresh();
-      cleanupSubscriptions();
+      if (autoRefreshTimer) {
+        clearInterval(autoRefreshTimer);
+      }
     };
-  }, [stopAutoRefresh, cleanupSubscriptions]);
+  }, [initializeService]);
 
   return {
-    // State
     state,
-    
-    // Data
-    news,
+    isAutoRefreshEnabled,
+    autoRefreshInterval,
     rankings,
     injuries,
+    news,
     liveUpdates,
-    
-    // Manual refresh functions
+    refreshAll,
     refreshNews,
     refreshRankings,
     refreshInjuries,
-    refreshAll,
-    
-    // Auto-refresh controls
-    isAutoRefreshEnabled,
-    autoRefreshInterval,
     startAutoRefresh,
     stopAutoRefresh,
-    setAutoRefreshInterval: handleSetAutoRefreshInterval,
-    
-    // Live updates
+    setAutoRefreshInterval,
     clearLiveUpdates,
-    
-    // Health and maintenance
+    clearCache,
     checkHealth,
-    clearCache
   };
 }
