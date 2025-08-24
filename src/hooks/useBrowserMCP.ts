@@ -214,7 +214,7 @@ export function useBrowserMCP(playerIds: string[]): BrowserMCPHook {
         const fpRankings = await browserMCPService.scrapeFantasyProRankings();
         const transformedRankings: RankingData[] = fpRankings.map((ranking, i) => ({
           playerId: `fp_${i}`,
-          playerName: ranking.name || `Player ${i + 1}`,
+          playerName: ranking.playerName || `Player ${i + 1}`,
           position: ranking.position || 'RB',
           rank: ranking.rank || i + 1,
           source: 'FantasyPros',
@@ -254,7 +254,7 @@ export function useBrowserMCP(playerIds: string[]): BrowserMCPHook {
           playerName: injury.playerName || `Player ${i + 1}`,
           status: injury.status || 'Healthy',
           description: injury.description || 'No injury report',
-          severity: injury.severity || 'minor',
+          severity: 'minor' as const,
           updated: new Date(),
         }));
         
@@ -282,7 +282,7 @@ export function useBrowserMCP(playerIds: string[]): BrowserMCPHook {
           id: `news_${i}`,
           headline: article.headline || `Fantasy News ${i + 1}`,
           summary: article.summary || 'Fantasy football update',
-          playersInvolved: article.players || [],
+          playersInvolved: article.affectedPlayers?.map(p => p.playerName) || [],
           source: article.source || 'Fantasy Source',
           updated: new Date(),
         }));
