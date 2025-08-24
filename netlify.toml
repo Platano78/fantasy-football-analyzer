@@ -30,20 +30,20 @@
   to = "/index.html"
   status = 200
 
-# API Proxy for CORS handling - Free APIs
+# API Proxy for CORS handling - Free APIs with debugging headers
 [[redirects]]
   from = "/api/espn/*"
   to = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/:splat"
   status = 200
   force = true
-  headers = {X-From = "Netlify"}
+  headers = {X-From = "Netlify", X-ESPN-Proxy = "Active", Access-Control-Allow-Origin = "*"}
 
 [[redirects]]
   from = "/api/espn-fantasy/*"
   to = "https://site.api.espn.com/apis/v2/sports/football/nfl/fantasy/:splat"
   status = 200
   force = true
-  headers = {X-From = "Netlify"}
+  headers = {X-From = "Netlify", X-ESPN-Fantasy-Proxy = "Active", Access-Control-Allow-Origin = "*"}
 
 [[redirects]]
   from = "/api/sleeper/*"

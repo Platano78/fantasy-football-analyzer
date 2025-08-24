@@ -17,3 +17,6 @@ export {
   useDataPreloader,
   useCacheMonitoring
 } from './usePerformanceCache';
+
+// ESPN API integration hook
+export { useESPNData } from './useESPNData';

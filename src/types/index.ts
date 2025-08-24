@@ -2,9 +2,9 @@
 
 export type Position = 'QB' | 'RB' | 'WR' | 'TE' | 'DEF' | 'K';
 export type ScoringSystem = 'ppr' | 'standard' | 'halfPpr';
-export type ViewType = 'draft' | 'compare' | 'rankings' | 'simulation' | 'live-data' | 'draft-tracker' | 'enhanced-ai' | 'news' | 'analytics' | 'legacy';
+export type ViewType = 'draft' | 'compare' | 'rankings' | 'simulation' | 'live-data' | 'draft-tracker' | 'enhanced-ai' | 'news' | 'analytics' | 'nfl-sync' | 'legacy';
 export type InjuryStatus = 'Healthy' | 'Questionable' | 'Doubtful' | 'Out' | 'IR';
-export type DraftStrategy = 'value_based' | 'position_scarcity' | 'balanced' | 'high_upside' | 'rb_zero' | 'user_controlled' | 'adp_based' | 'contrarian' | 'positional_runs' | 'analytics_based' | 'stars_and_scrubs';
+export type DraftStrategy = 'value_based' | 'position_scarcity' | 'balanced' | 'high_upside' | 'rb_zero' | 'user_controlled' | 'adp_based' | 'contrarian' | 'positional_runs' | 'analytics_based' | 'stars_and_scrubs' | 'boom_bust';
 
 export interface Player {
   id: number;

@@ -1,7 +1,8 @@
 import { memo, useMemo, useCallback } from 'react';
-import { RefreshCw, TrendingUp, AlertCircle, CheckCircle, Clock, Activity, Wifi, Database, WifiOff, Globe } from 'lucide-react';
+import { RefreshCw, TrendingUp, AlertCircle, CheckCircle, Clock, Activity, Wifi, Database, WifiOff, Globe, Zap } from 'lucide-react';
 import { useFantasyFootball } from '@/contexts/FantasyFootballContext';
 import { useBrowserMCP } from '@/hooks/useBrowserMCP';
+import { useESPNData } from '@/hooks/useESPNData';
 import { Player } from '@/types';
 
 // Data source status interface
@@ -293,8 +294,19 @@ export default function LiveDataView() {
   // Browser MCP integration
   const browserMCP = useBrowserMCP(myPlayerIds);
   
+  // ESPN API integration
+  const espnData = useESPNData();
+  
   // Transform Browser MCP data to component format
   const dataSources: DataSource[] = useMemo(() => [
+    {
+      id: 'espn-api',
+      name: 'ESPN API Direct',
+      status: espnData.isInitialized ? (espnData.isLoading ? 'syncing' : 'connected') : 'error',
+      lastUpdate: espnData.lastUpdate || new Date(),
+      updateInterval: 15,
+      description: 'Direct ESPN API for real-time player data, projections, and injury reports'
+    },
     {
       id: 'fantasypros',
       name: 'FantasyPros',
@@ -304,12 +316,12 @@ export default function LiveDataView() {
       description: 'Expert consensus rankings and news'
     },
     {
-      id: 'espn',
-      name: 'ESPN Fantasy',
+      id: 'espn-browser',
+      name: 'ESPN Fantasy (Browser)',
       status: browserMCP.state.healthStatus.espn ? 'connected' : 'error',
       lastUpdate: browserMCP.state.lastUpdate,
       updateInterval: Math.floor(browserMCP.autoRefreshInterval / 60),
-      description: 'Player rankings and projections'
+      description: 'Player rankings and projections via browser scraping'
     },
     {
       id: 'nfl',
@@ -327,18 +339,35 @@ export default function LiveDataView() {
       updateInterval: 10,
       description: 'Real-time ADP and draft data'
     }
-  ], [browserMCP.state.healthStatus, browserMCP.state.lastUpdate, browserMCP.autoRefreshInterval]);
+  ], [
+    espnData.isInitialized, 
+    espnData.isLoading, 
+    espnData.lastUpdate,
+    browserMCP.state.healthStatus, 
+    browserMCP.state.lastUpdate, 
+    browserMCP.autoRefreshInterval
+  ]);
 
-  // Calculate live statistics
+  // Calculate live statistics combining both data sources
   const stats = useMemo(() => ({
-    liveRankings: browserMCP.rankings.length,
-    adpUpdates: browserMCP.rankings.filter(r => 
-      Date.now() - r.updated.getTime() < 3600000 // Last hour
-    ).length,
-    injuryUpdates: browserMCP.injuries.filter(i => 
-      Date.now() - i.updated.getTime() < 24 * 3600000 // Last 24 hours
-    ).length
-  }), [browserMCP.rankings, browserMCP.injuries]);
+    liveRankings: browserMCP.rankings.length + espnData.rankings.length,
+    adpUpdates: [
+      ...browserMCP.rankings.filter(r => 
+        Date.now() - r.updated.getTime() < 3600000 // Last hour
+      ),
+      ...espnData.rankings.filter(r => 
+        Date.now() - r.updated.getTime() < 3600000 // Last hour
+      )
+    ].length,
+    injuryUpdates: [
+      ...browserMCP.injuries.filter(i => 
+        Date.now() - i.updated.getTime() < 24 * 3600000 // Last 24 hours
+      ),
+      ...espnData.injuries.filter(i => 
+        Date.now() - i.updated.getTime() < 24 * 3600000 // Last 24 hours
+      )
+    ].length
+  }), [browserMCP.rankings, browserMCP.injuries, espnData.rankings, espnData.injuries]);
 
   // Callback handlers using Browser MCP
   const handleToggleAutoRefresh = useCallback(() => {
@@ -354,16 +383,23 @@ export default function LiveDataView() {
   }, [browserMCP]);
 
   const handleManualRefresh = useCallback(async () => {
-    await browserMCP.refreshAll();
-  }, [browserMCP]);
+    // Refresh both Browser MCP and ESPN data
+    await Promise.all([
+      browserMCP.refreshAll(),
+      espnData.refreshData()
+    ]);
+  }, [browserMCP, espnData]);
 
   const handleRefreshSource = useCallback(async (sourceId: string) => {
     // Refresh specific data based on source
     switch (sourceId) {
+      case 'espn-api':
+        await espnData.refreshData();
+        break;
       case 'fantasypros':
         await browserMCP.refreshNews();
         break;
-      case 'espn':
+      case 'espn-browser':
         await browserMCP.refreshRankings();
         break;
       case 'nfl':
@@ -537,6 +573,121 @@ export default function LiveDataView() {
               >
                 Retry Connection
               </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ESPN API Integration Status */}
+      <div className={`border rounded-lg p-6 ${
+        espnData.isInitialized 
+          ? 'bg-green-50 border-green-200' 
+          : 'bg-yellow-50 border-yellow-200'
+      }`}>
+        <div className="flex items-start gap-3">
+          <Zap className={`w-6 h-6 mt-1 ${
+            espnData.isInitialized ? 'text-green-600' : 'text-yellow-600'
+          }`} />
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className={`font-semibold ${
+                espnData.isInitialized ? 'text-green-900' : 'text-yellow-900'
+              }`}>
+                ESPN API Direct Integration Status
+              </h4>
+              
+              {espnData.isInitialized && (
+                <div className="flex items-center gap-2 text-sm">
+                  <button
+                    onClick={() => espnData.clearCache()}
+                    className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                  >
+                    Clear Cache
+                  </button>
+                  <button
+                    onClick={() => espnData.refreshData()}
+                    className={`px-3 py-1 text-xs rounded transition-colors ${
+                      espnData.isLoading 
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-green-100 text-green-700 hover:bg-green-200'
+                    }`}
+                    disabled={espnData.isLoading}
+                  >
+                    {espnData.isLoading ? 'Refreshing...' : 'Refresh Data'}
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            <p className={`text-sm mb-3 ${
+              espnData.isInitialized ? 'text-green-800' : 'text-yellow-800'
+            }`}>
+              {espnData.isInitialized ? (
+                'ESPN API is directly connected and providing real-time player data, projections, injury reports, and rankings with intelligent caching and rate limiting.'
+              ) : (
+                espnData.error || 'ESPN API is initializing or temporarily unavailable. Using cached/fallback data.'
+              )}
+            </p>
+            
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+              <div className="flex items-center gap-1">
+                {espnData.isInitialized ? (
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-yellow-600" />
+                )}
+                <span className={espnData.isInitialized ? 'text-green-800' : 'text-yellow-800'}>
+                  API {espnData.isInitialized ? 'Online' : 'Fallback'}
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-1">
+                {espnData.isLoading ? (
+                  <RefreshCw className="w-4 h-4 text-blue-600 animate-spin" />
+                ) : (
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                )}
+                <span className={espnData.isLoading ? 'text-blue-800' : 'text-green-800'}>
+                  {espnData.isLoading ? 'Syncing' : 'Ready'}
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-1">
+                <Activity className="w-4 h-4 text-blue-600" />
+                <span className="text-blue-800">
+                  {espnData.players.length} Players
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-1">
+                <TrendingUp className="w-4 h-4 text-purple-600" />
+                <span className="text-purple-800">
+                  {espnData.projections.length} Projections
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-1">
+                <AlertCircle className="w-4 h-4 text-red-600" />
+                <span className="text-red-800">
+                  {espnData.injuries.length} Injuries
+                </span>
+              </div>
+            </div>
+            
+            {espnData.lastUpdate && (
+              <div className="mt-3 text-xs text-gray-600">
+                Last updated: {espnData.lastUpdate.toLocaleString()}
+              </div>
+            )}
+            
+            {espnData.error && (
+              <div className="mt-3 p-3 bg-red-100 border border-red-300 rounded-lg">
+                <div className="flex items-center gap-2 text-red-800 text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  <span className="font-medium">Notice:</span>
+                  <span>{espnData.error}</span>
+                </div>
+              </div>
             )}
           </div>
         </div>

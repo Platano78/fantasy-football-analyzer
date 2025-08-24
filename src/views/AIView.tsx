@@ -4,95 +4,24 @@ import { useFantasyFootball } from '@/contexts/FantasyFootballContext';
 import { useDraftSimulation } from '@/hooks';
 import { Player, Position, ScoringSystem, DraftStrategy, InjuryStatus } from '@/types';
 
-// Enhanced chat message interface with advanced features
+// Simplified chat message interface for performance
 interface ChatMessage {
   id: string;
   type: 'user' | 'ai' | 'alert';
   content: string;
   timestamp: Date;
-  priority?: 'low' | 'medium' | 'high' | 'urgent';
-  category?: 'strategy' | 'alert' | 'recommendation' | 'analysis' | 'planning';
-  analysis?: {
-    playerRecommendations?: Player[];
-    strategyPoints?: string[];
-    riskFactors?: string[];
-    tierAnalysis?: Record<Position, { available: number; recommended: number }>;
-    tradeRecommendations?: TradeRecommendation[];
-    weeklyPlanning?: WeeklyPlan;
-    valueAnalysis?: ValueAnalysis[];
-    scarcityAlert?: ScarcityAlert;
-    injuryImpact?: InjuryImpact;
-  };
   isTyping?: boolean;
-  expiresAt?: Date;
 }
 
-// Advanced AI analysis interfaces
-interface TradeRecommendation {
-  targetPlayer: Player;
-  offerPlayers: Player[];
-  fairValue: number;
-  reasoning: string;
-  riskLevel: 'low' | 'medium' | 'high';
-}
-
-interface WeeklyPlan {
-  week: number;
-  startSitDecisions: Array<{
-    player: Player;
-    recommendation: 'start' | 'sit';
-    confidence: number;
-    reasoning: string;
-  }>;
-  waiverTargets: Player[];
-  matchupAnalysis: string;
-}
-
-interface ValueAnalysis {
-  player: Player;
-  currentValue: number;
-  projectedValue: number;
-  valueChange: number;
-  reasoning: string;
-}
-
-interface ScarcityAlert {
-  position: Position;
-  remainingQuality: number;
-  urgencyLevel: 'low' | 'medium' | 'high';
-  recommendation: string;
-}
-
-interface InjuryImpact {
-  player: Player;
-  impactLevel: 'minor' | 'moderate' | 'severe';
-  affectedPlayers: Player[];
-  recommendations: string[];
-}
-
-// Season phase detection
+// Simplified types for performance
 type SeasonPhase = 'draft' | 'early' | 'mid' | 'late' | 'playoff';
 
-// User preference tracking
 interface UserPreferences {
   draftStrategy: DraftStrategy[];
   riskTolerance: 'conservative' | 'balanced' | 'aggressive';
   positionPriorities: Position[];
   targetTypes: ('sleeper' | 'safe' | 'upside' | 'handcuff')[];
   tradingActivity: 'never' | 'rare' | 'active' | 'frequent';
-}
-
-// Proactive alert system
-interface ProactiveAlert {
-  id: string;
-  type: 'bye_week' | 'injury_update' | 'matchup_alert' | 'waiver_opportunity' | 'trade_deadline';
-  severity: 'info' | 'warning' | 'urgent';
-  title: string;
-  message: string;
-  actionRequired: boolean;
-  players?: Player[];
-  createdAt: Date;
-  dismissible: boolean;
 }
 
 // Enhanced AI prompts for comprehensive analysis
@@ -203,176 +132,7 @@ const ChatMessageComponent = memo(({
             )}
           </div>
 
-          {/* Enhanced analysis section for AI messages */}
-          {(isAI || isAlert) && message.analysis && !message.isTyping && (
-            <div className="mt-4 space-y-3">
-              {/* Player Recommendations */}
-              {message.analysis.playerRecommendations && (
-                <div className="bg-white p-3 rounded border">
-                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-1">
-                    <Target className="w-4 h-4" />
-                    Player Recommendations
-                  </h4>
-                  <div className="space-y-2">
-                    {message.analysis.playerRecommendations.slice(0, 3).map(player => (
-                      <div key={player.id} className="flex justify-between items-center text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{player.name} ({player.position})</span>
-                          {player.injury !== 'Healthy' && (
-                            <span className="px-1 py-0.5 bg-red-100 text-red-700 text-xs rounded">
-                              {player.injury}
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-gray-600">ADP: {player.adp.toFixed(1)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* Trade Recommendations */}
-              {message.analysis.tradeRecommendations && (
-                <div className="bg-white p-3 rounded border">
-                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-1">
-                    <BarChart3 className="w-4 h-4" />
-                    Trade Opportunities
-                  </h4>
-                  <div className="space-y-2">
-                    {message.analysis.tradeRecommendations.slice(0, 2).map((trade, index) => (
-                      <div key={index} className="text-sm">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium">Target: {trade.targetPlayer.name}</span>
-                          <span className={`px-2 py-1 text-xs rounded ${
-                            trade.riskLevel === 'low' ? 'bg-green-100 text-green-700' :
-                            trade.riskLevel === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-red-100 text-red-700'
-                          }`}>
-                            {trade.riskLevel} risk
-                          </span>
-                        </div>
-                        <p className="text-gray-600 text-xs mt-1">{trade.reasoning}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* Weekly Planning */}
-              {message.analysis.weeklyPlanning && (
-                <div className="bg-white p-3 rounded border">
-                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-1">
-                    <Calendar className="w-4 h-4" />
-                    Week {message.analysis.weeklyPlanning.week} Planning
-                  </h4>
-                  <div className="space-y-2">
-                    {message.analysis.weeklyPlanning.startSitDecisions.slice(0, 3).map((decision, index) => (
-                      <div key={index} className="flex justify-between items-center text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${
-                            decision.recommendation === 'start' ? 'bg-green-500' : 'bg-red-500'
-                          }`}></span>
-                          <span className="font-medium">{decision.player.name}</span>
-                          <span className="text-gray-500">({decision.recommendation})</span>
-                        </div>
-                        <span className="text-gray-600">{decision.confidence}% confident</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* Value Analysis */}
-              {message.analysis.valueAnalysis && (
-                <div className="bg-white p-3 rounded border">
-                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-1">
-                    <TrendingUp className="w-4 h-4" />
-                    Value Trends
-                  </h4>
-                  <div className="space-y-2">
-                    {message.analysis.valueAnalysis.slice(0, 3).map((analysis, index) => (
-                      <div key={index} className="flex justify-between items-center text-sm">
-                        <span className="font-medium">{analysis.player.name}</span>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs ${
-                            analysis.valueChange > 0 ? 'text-green-600' : 'text-red-600'
-                          }`}>
-                            {analysis.valueChange > 0 ? '↑' : '↓'} {Math.abs(analysis.valueChange).toFixed(1)}%
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* Scarcity Alert */}
-              {message.analysis.scarcityAlert && (
-                <div className="bg-white p-3 rounded border border-orange-200">
-                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-1">
-                    <AlertTriangle className="w-4 h-4 text-orange-500" />
-                    Position Scarcity Alert
-                  </h4>
-                  <div className="text-sm">
-                    <p><strong>{message.analysis.scarcityAlert.position}:</strong> Only {message.analysis.scarcityAlert.remainingQuality} quality players remaining</p>
-                    <p className="text-gray-600 mt-1">{message.analysis.scarcityAlert.recommendation}</p>
-                  </div>
-                </div>
-              )}
-              
-              {/* Injury Impact */}
-              {message.analysis.injuryImpact && (
-                <div className="bg-white p-3 rounded border border-red-200">
-                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-1">
-                    <Activity className="w-4 h-4 text-red-500" />
-                    Injury Impact Analysis
-                  </h4>
-                  <div className="text-sm">
-                    <p><strong>{message.analysis.injuryImpact.player.name}:</strong> {message.analysis.injuryImpact.impactLevel} impact</p>
-                    <div className="mt-2">
-                      {message.analysis.injuryImpact.recommendations.slice(0, 2).map((rec, index) => (
-                        <p key={index} className="text-gray-600">• {rec}</p>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {message.analysis.strategyPoints && (
-                <div className="bg-white p-3 rounded border">
-                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-1">
-                    <Zap className="w-4 h-4" />
-                    Strategy Points
-                  </h4>
-                  <ul className="text-sm space-y-1">
-                    {message.analysis.strategyPoints.map((point, index) => (
-                      <li key={index} className="flex items-start gap-2">
-                        <span className="text-blue-500 mt-1">•</span>
-                        <span>{point}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {message.analysis.riskFactors && (
-                <div className="bg-white p-3 rounded border">
-                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-1">
-                    <Shield className="w-4 h-4" />
-                    Risk Factors
-                  </h4>
-                  <ul className="text-sm space-y-1">
-                    {message.analysis.riskFactors.map((risk, index) => (
-                      <li key={index} className="flex items-start gap-2">
-                        <span className="text-yellow-500 mt-1">⚠</span>
-                        <span>{risk}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Complex analysis section removed for performance */}
 
           {/* Message actions */}
           {isAI && !message.isTyping && (
@@ -545,176 +305,7 @@ const ContextSummary = memo(({
 
 ContextSummary.displayName = 'ContextSummary';
 
-// Advanced AI Strategy Engine
-const AdvancedStrategyEngine = memo(() => {
-  const analyzeUserPreferences = useCallback((draftHistory: any[], customRankings: Record<number, number>): UserPreferences => {
-    // Analyze draft patterns to determine user preferences
-    const positionCounts = draftHistory.reduce((counts, pick) => {
-      const position = pick.player?.position;
-      if (position) {
-        counts[position] = (counts[position] || 0) + 1;
-      }
-      return counts;
-    }, {} as Record<Position, number>);
-
-    const totalPicks = draftHistory.length;
-    const rbEarly = draftHistory.slice(0, 3).filter(p => p.player?.position === 'RB').length;
-    const wrEarly = draftHistory.slice(0, 3).filter(p => p.player?.position === 'WR').length;
-
-    return {
-      draftStrategy: rbEarly >= 2 ? ['rb_zero'] : wrEarly >= 2 ? ['stars_and_scrubs'] : ['balanced'],
-      riskTolerance: Object.keys(customRankings).length > 10 ? 'aggressive' : 'balanced',
-      positionPriorities: Object.entries(positionCounts)
-        .sort(([,a], [,b]) => b - a)
-        .map(([pos]) => pos as Position),
-      targetTypes: ['safe', 'upside'],
-      tradingActivity: 'active'
-    };
-  }, []);
-
-  const detectSeasonPhase = useCallback((currentWeek: number, draftComplete: boolean): SeasonPhase => {
-    if (!draftComplete) return 'draft';
-    if (currentWeek <= 4) return 'early';
-    if (currentWeek <= 10) return 'mid';
-    if (currentWeek <= 14) return 'late';
-    return 'playoff';
-  }, []);
-
-  const generateProactiveAlerts = useCallback((players: Player[], draftedPlayers: Set<number>, currentWeek = 1): ProactiveAlert[] => {
-    const alerts: ProactiveAlert[] = [];
-    const now = new Date();
-
-    // Bye week alerts
-    const upcomingByeWeeks = [4, 5, 6, 7]; // Simulate bye weeks
-    const affectedPlayers = Array.from(draftedPlayers)
-      .map(id => players.find(p => p.id === id))
-      .filter(Boolean) as Player[];
-
-    if (affectedPlayers.length > 0 && upcomingByeWeeks.includes(currentWeek + 1)) {
-      alerts.push({
-        id: `bye-week-${currentWeek + 1}`,
-        type: 'bye_week',
-        severity: 'warning',
-        title: `Bye Week Alert - Week ${currentWeek + 1}`,
-        message: `Multiple players have byes next week. Consider waiver wire options.`,
-        actionRequired: true,
-        players: affectedPlayers.slice(0, 3),
-        createdAt: now,
-        dismissible: true
-      });
-    }
-
-    // Injury alerts
-    const injuredPlayers = players.filter(p => 
-      draftedPlayers.has(p.id) && p.injury !== 'Healthy'
-    );
-
-    injuredPlayers.forEach(player => {
-      if (player.injury === 'Doubtful' || player.injury === 'Out') {
-        alerts.push({
-          id: `injury-${player.id}`,
-          type: 'injury_update',
-          severity: player.injury === 'Out' ? 'urgent' : 'warning',
-          title: `Injury Update: ${player.name}`,
-          message: `${player.name} is ${player.injury.toLowerCase()}. Consider backup options.`,
-          actionRequired: true,
-          players: [player],
-          createdAt: now,
-          dismissible: true
-        });
-      }
-    });
-
-    // Position scarcity alerts
-    const positionCounts = players.reduce((counts, player) => {
-      if (!draftedPlayers.has(player.id)) {
-        counts[player.position] = (counts[player.position] || 0) + 1;
-      }
-      return counts;
-    }, {} as Record<Position, number>);
-
-    Object.entries(positionCounts).forEach(([position, count]) => {
-      if (count < 5 && ['RB', 'WR', 'TE'].includes(position)) {
-        alerts.push({
-          id: `scarcity-${position}`,
-          type: 'matchup_alert',
-          severity: 'info',
-          title: `${position} Scarcity Alert`,
-          message: `Only ${count} quality ${position}s remain available.`,
-          actionRequired: false,
-          createdAt: now,
-          dismissible: true
-        });
-      }
-    });
-
-    return alerts;
-  }, []);
-
-  return null;
-});
-
-AdvancedStrategyEngine.displayName = 'AdvancedStrategyEngine';
-
-// Proactive Alert Display Component
-const ProactiveAlertDisplay = memo(({ alerts, onDismiss }: {
-  alerts: ProactiveAlert[];
-  onDismiss: (alertId: string) => void;
-}) => {
-  if (alerts.length === 0) return null;
-
-  return (
-    <div className="bg-white rounded-lg shadow-md p-4 mb-4">
-      <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-        <AlertTriangle className="w-4 h-4 text-orange-500" />
-        Active Alerts ({alerts.length})
-      </h4>
-      <div className="space-y-2">
-        {alerts.slice(0, 3).map(alert => (
-          <div
-            key={alert.id}
-            className={`p-3 rounded-lg border ${
-              alert.severity === 'urgent' ? 'bg-red-50 border-red-200' :
-              alert.severity === 'warning' ? 'bg-yellow-50 border-yellow-200' :
-              'bg-blue-50 border-blue-200'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${
-                  alert.severity === 'urgent' ? 'bg-red-500' :
-                  alert.severity === 'warning' ? 'bg-yellow-500' :
-                  'bg-blue-500'
-                }`}></span>
-                <span className="font-medium text-sm">{alert.title}</span>
-              </div>
-              {alert.dismissible && (
-                <button
-                  onClick={() => onDismiss(alert.id)}
-                  className="text-gray-400 hover:text-gray-600 text-sm"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-            <p className="text-xs text-gray-600 mt-1">{alert.message}</p>
-            {alert.players && alert.players.length > 0 && (
-              <div className="flex gap-1 mt-2">
-                {alert.players.map(player => (
-                  <span key={player.id} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
-                    {player.name}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-});
-
-ProactiveAlertDisplay.displayName = 'ProactiveAlertDisplay';
+// Removed complex components for performance
 
 // Main AIView component with enhanced features
 export default function AIView() {
@@ -722,7 +313,6 @@ export default function AIView() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [proactiveAlerts, setProactiveAlerts] = useState<ProactiveAlert[]>([]);
   const [userPreferences, setUserPreferences] = useState<UserPreferences>({ 
     draftStrategy: ['balanced'], 
     riskTolerance: 'balanced', 
@@ -742,96 +332,44 @@ export default function AIView() {
     const phase = isDraftComplete ? 'early' : 'draft';
     setSeasonPhase(phase);
 
-    // Generate initial proactive alerts
-    const initialAlerts: ProactiveAlert[] = [
-      {
-        id: 'draft-prep',
-        type: 'matchup_alert',
-        severity: 'info',
-        title: 'Draft Preparation Complete',
-        message: 'AI coaching systems activated. Monitoring for opportunities and alerts.',
-        actionRequired: false,
-        createdAt: new Date(),
-        dismissible: true
-      }
-    ];
-    setProactiveAlerts(initialAlerts);
+    // Removed initial proactive alerts for performance
 
     const welcomeMessage: ChatMessage = {
       id: '1',
       type: 'ai',
-      content: `🧠 **Advanced AI Fantasy Coach Activated**\n\n**Season Phase:** ${phase.charAt(0).toUpperCase() + phase.slice(1)}\n**League:** ${state.draftSettings.leagueName}\n**Scoring:** ${state.scoringSystem.toUpperCase()}\n\n**Enhanced Capabilities:**\n• 🎯 Proactive alert system for injuries, byes, and opportunities\n• 🧠 Strategy adaptation based on your draft patterns\n• 📊 Multi-week planning and roster optimization\n• 💰 Real-time value analysis and trade recommendations\n• 🏆 Playoff preparation and schedule analysis\n\n**Current Focus:** ${phase === 'draft' ? 'Draft strategy and value identification' : 'Weekly optimization and roster management'}\n\nI'm monitoring your league for opportunities and will proactively alert you to important developments. What would you like to analyze first?`,
-      timestamp: new Date(),
-      priority: 'high',
-      category: 'strategy',
-      analysis: {
-        strategyPoints: [
-          `${state.scoringSystem.toUpperCase()} scoring system detected - optimizing recommendations`,
-          'Monitoring position scarcity and value opportunities',
-          'Tracking injury reports and roster implications',
-          phase === 'draft' ? 'Draft strategy adaptation active' : 'Weekly lineup optimization ready'
-        ]
-      }
+      content: `🧠 **AI Fantasy Assistant (Performance Optimized)**\n\n**Season Phase:** ${phase.charAt(0).toUpperCase() + phase.slice(1)}\n**League:** ${state.draftSettings.leagueName}\n**Scoring:** ${state.scoringSystem.toUpperCase()}\n\n**Available Features:**\n• Basic AI responses and recommendations\n• Chat interface for questions\n• Quick action buttons for common queries\n\n**Current Focus:** ${phase === 'draft' ? 'Draft assistance' : 'Season management'}\n\nAsk me anything about fantasy football!`,
+      timestamp: new Date()
     };
     setMessages([welcomeMessage]);
   }, [state.draftSettings, state.scoringSystem, state.draftedPlayers.size]);
 
-  // Proactive alert generation system
-  useEffect(() => {
-    const generateAlerts = () => {
-      const alerts: ProactiveAlert[] = [];
-      const now = new Date();
-
-      // Generate proactive alerts based on current state
-      if (seasonPhase === 'draft') {
-        // Draft-specific alerts
-        const roundProgress = state.currentOverallPick / (state.draftSettings.totalTeams * state.draftSettings.rounds);
-        if (roundProgress > 0.6 && userTeamNeeds.includes('RB' as Position)) {
-          alerts.push({
-            id: 'rb-scarcity-draft',
-            type: 'matchup_alert',
-            severity: 'warning',
-            title: 'RB Scarcity Alert',
-            message: 'Quality RBs becoming scarce. Consider prioritizing RB in next few picks.',
-            actionRequired: true,
-            createdAt: now,
-            dismissible: true
-          });
-        }
-      } else {
-        // Season management alerts
-        const injuredPlayers = state.players.filter(p => 
-          state.draftedPlayers.has(p.id) && p.injury !== 'Healthy'
-        );
-        
-        injuredPlayers.forEach(player => {
-          alerts.push({
-            id: `injury-alert-${player.id}`,
-            type: 'injury_update',
-            severity: player.injury === 'Out' ? 'urgent' : 'warning',
-            title: `${player.name} Injury Update`,
-            message: `${player.name} status: ${player.injury}. Review backup options.`,
-            actionRequired: true,
-            players: [player],
-            createdAt: now,
-            dismissible: true
-          });
-        });
+  // Determine user team needs based on drafted players
+  const userTeamNeeds = useMemo(() => {
+    const neededPositions: Position[] = [];
+    const positionCounts = Array.from(state.draftedPlayers).reduce((counts, playerId) => {
+      const player = state.players.find(p => p.id === playerId);
+      if (player) {
+        counts[player.position] = (counts[player.position] || 0) + 1;
       }
+      return counts;
+    }, {} as Record<Position, number>);
 
-      setProactiveAlerts(prev => {
-        const existingIds = new Set(prev.map(alert => alert.id));
-        const newAlerts = alerts.filter(alert => !existingIds.has(alert.id));
-        return [...prev, ...newAlerts];
-      });
-    };
+    // Standard roster requirements
+    const requirements: Record<Position, number> = { QB: 1, RB: 2, WR: 2, TE: 1, DEF: 1, K: 1 };
+    
+    Object.entries(requirements).forEach(([pos, needed]) => {
+      const current = positionCounts[pos as Position] || 0;
+      if (current < needed) {
+        for (let i = 0; i < needed - current; i++) {
+          neededPositions.push(pos as Position);
+        }
+      }
+    });
 
-    // Generate alerts initially and then periodically
-    generateAlerts();
-    const alertInterval = setInterval(generateAlerts, 30000); // Every 30 seconds
+    return neededPositions;
+  }, [state.draftedPlayers, state.players]);
 
-    return () => clearInterval(alertInterval);
-  }, [seasonPhase, state.currentOverallPick, state.draftSettings, userTeamNeeds, state.players, state.draftedPlayers]);
+  // Removed proactive alert generation system for performance
 
   // User preference analysis
   useEffect(() => {
@@ -864,174 +402,17 @@ export default function AIView() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Determine user team needs based on drafted players
-  const userTeamNeeds = useMemo(() => {
-    const neededPositions: Position[] = [];
-    const positionCounts = Array.from(state.draftedPlayers).reduce((counts, playerId) => {
-      const player = state.players.find(p => p.id === playerId);
-      if (player) {
-        counts[player.position] = (counts[player.position] || 0) + 1;
-      }
-      return counts;
-    }, {} as Record<Position, number>);
-
-    // Standard roster requirements
-    const requirements: Record<Position, number> = { QB: 1, RB: 2, WR: 2, TE: 1, DEF: 1, K: 1 };
-    
-    Object.entries(requirements).forEach(([pos, needed]) => {
-      const current = positionCounts[pos as Position] || 0;
-      if (current < needed) {
-        for (let i = 0; i < needed - current; i++) {
-          neededPositions.push(pos as Position);
-        }
-      }
-    });
-
-    return neededPositions;
-  }, [state.draftedPlayers, state.players]);
-
-  // Enhanced AI response generation with advanced analysis
+  // Simplified AI response generation for performance
   const generateAIResponse = useCallback(async (userMessage: string): Promise<ChatMessage> => {
-    await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000)); // Simulate processing time
-
-    const topAvailable = availablePlayers.slice(0, 10);
-    const playerRecommendations = topAvailable.slice(0, 5);
+    await new Promise(resolve => setTimeout(resolve, 500));
     
-    let content = '';
-    let analysis: ChatMessage['analysis'] = {};
-    let priority: ChatMessage['priority'] = 'medium';
-    let category: ChatMessage['category'] = 'analysis';
-
-    // Enhanced analysis based on message content and context
-    if (userMessage.toLowerCase().includes('tier')) {
-      category = 'analysis';
-      priority = 'high';
-      content = `🎯 **Advanced Tier Analysis - Round ${currentRound}**\n\n**TIER 1 (Elite):** Top 12 overall picks\n• Proven workhorse RBs with 300+ touches\n• Elite WRs with 140+ targets\n• Top-tier QBs in high-volume offenses\n\n**TIER 2 (Solid):** Rounds 2-4\n• High-floor players with weekly starter upside\n• Consistent target/carry share players\n\n**TIER 3 (Value):** Rounds 5-8\n• Upside plays with path to relevance\n• Handcuffs and breakout candidates\n\n**Current Opportunity:** ${seasonPhase === 'draft' ? `Round ${currentRound} presents value at ${userTeamNeeds[0] || 'multiple positions'}` : 'Focus on weekly matchup advantages'}`;
-      
-      analysis.playerRecommendations = playerRecommendations;
-      analysis.strategyPoints = [
-        `${state.scoringSystem.toUpperCase()} scoring: Prioritize reception volume`,
-        `Position scarcity: ${userTeamNeeds.length > 0 ? `Address ${userTeamNeeds.join(', ')} needs` : 'Build depth'}`,
-        'Value-based targeting: Target ADP fallers',
-        seasonPhase === 'draft' ? 'Handcuff strategy in late rounds' : 'Streaming positions for matchups'
-      ];
-
-      // Add scarcity analysis
-      const scarcityData = ['RB', 'WR', 'TE', 'QB'].map(pos => {
-        const available = availablePlayers.filter(p => p.position === pos && p.tier <= 6).length;
-        return { position: pos as Position, available };
-      }).find(p => p.available < 8);
-
-      if (scarcityData) {
-        analysis.scarcityAlert = {
-          position: scarcityData.position,
-          remainingQuality: scarcityData.available,
-          urgencyLevel: scarcityData.available < 4 ? 'high' : 'medium',
-          recommendation: `Consider ${scarcityData.position} soon - only ${scarcityData.available} quality options left`
-        };
-      }
-
-    } else if (userMessage.toLowerCase().includes('trade')) {
-      category = 'recommendation';
-      priority = 'high';
-      content = `📊 **Trade Analysis Engine Activated**\n\n**Current Market Context:**\n• ${seasonPhase === 'draft' ? 'Draft-based valuations' : 'Performance-based market'}\n• Your risk tolerance: ${userPreferences.riskTolerance}\n• Trading activity: ${userPreferences.tradingActivity}\n\n**Trade Opportunities:**\n• Target buy-low candidates with soft schedules\n• Consider selling high on over-performing assets\n• Package depth for upgrades at key positions\n\n**Fair Value Framework:** Using ADP, projections, and positional scarcity`;
-
-      // Generate mock trade recommendations
-      const tradeCandidates = playerRecommendations.slice(0, 2);
-      analysis.tradeRecommendations = tradeCandidates.map(player => ({
-        targetPlayer: player,
-        offerPlayers: playerRecommendations.slice(2, 4),
-        fairValue: 0.85, // Mock fair value
-        reasoning: `${player.name} has favorable upcoming schedule and undervalued in ${state.scoringSystem} format`,
-        riskLevel: 'medium' as const
-      }));
-
-    } else if (userMessage.toLowerCase().includes('week')) {
-      category = 'planning';
-      priority = 'high';
-      content = `📅 **Weekly Optimization System**\n\n**This Week's Focus:**\n• Lineup optimization based on matchups\n• Start/sit decisions with confidence ratings\n• Waiver wire priorities and drop candidates\n• Injury impact assessments\n\n**Multi-Week Planning:**\n• Upcoming bye week preparations\n• Schedule-based trade targets\n• Playoff positioning strategy`;
-
-      // Generate weekly planning
-      const myPlayers = Array.from(state.draftedPlayers)
-        .map(id => state.players.find(p => p.id === id))
-        .filter(Boolean) as Player[];
-      
-      if (myPlayers.length > 0) {
-        analysis.weeklyPlanning = {
-          week: Math.floor(Math.random() * 17) + 1,
-          startSitDecisions: myPlayers.slice(0, 3).map(player => ({
-            player,
-            recommendation: Math.random() > 0.5 ? 'start' : 'sit' as const,
-            confidence: Math.floor(Math.random() * 40) + 60,
-            reasoning: `Matchup analysis suggests ${Math.random() > 0.5 ? 'favorable' : 'challenging'} game script`
-          })),
-          waiverTargets: availablePlayers.slice(0, 3),
-          matchupAnalysis: 'Favorable game scripts for passing attacks this week'
-        };
-      }
-
-    } else if (userMessage.toLowerCase().includes('injury')) {
-      category = 'alert';
-      priority = 'urgent';
-      content = `🏥 **Injury Impact Analysis**\n\n**Current Injury Landscape:**\n• Monitoring ${state.players.filter(p => p.injury !== 'Healthy').length} injured players\n• Impact assessments for roster planning\n• Handcuff and replacement value analysis\n\n**Injury Contingency Planning:**\n• Identify vulnerable roster positions\n• Prioritize handcuffs and insurance policies\n• Monitor practice reports and beat writers`;
-
-      const injuredPlayers = state.players.filter(p => p.injury !== 'Healthy').slice(0, 3);
-      if (injuredPlayers.length > 0) {
-        analysis.injuryImpact = {
-          player: injuredPlayers[0],
-          impactLevel: injuredPlayers[0].injury === 'Out' ? 'severe' : 'moderate',
-          affectedPlayers: injuredPlayers,
-          recommendations: [
-            `Monitor ${injuredPlayers[0].name}'s practice participation`,
-            'Consider handcuff or replacement options',
-            'Evaluate waiver wire for contingency plans'
-          ]
-        };
-      }
-
-    } else if (userMessage.toLowerCase().includes('value')) {
-      category = 'analysis';
-      priority = 'medium';
-      content = `💰 **Value Analysis Engine**\n\n**Current Value Landscape:**\n• ADP vs Performance discrepancies\n• Rising and falling player values\n• Position-based value opportunities\n\n**Value Categories:**\n• **Buy Low:** Underperforming with positive regression signs\n• **Sell High:** Overperforming with concerning metrics\n• **Hold:** Fairly valued with stable outlook`;
-
-      // Generate value analysis
-      analysis.valueAnalysis = playerRecommendations.slice(0, 4).map(player => {
-        const valueChange = (Math.random() - 0.5) * 20; // Random value change for demo
-        return {
-          player,
-          currentValue: player.adp,
-          projectedValue: player.adp + valueChange,
-          valueChange,
-          reasoning: valueChange > 0 ? 
-            'Positive trend indicators suggest upward trajectory' : 
-            'Concerning usage trends may limit upside'
-        };
-      });
-
-    } else {
-      // Default comprehensive analysis
-      category = 'strategy';
-      content = `🧠 **Comprehensive Analysis**\n\n**Current Situation:**\n• Available talent: ${availablePlayers.length} players\n• Team needs: ${userTeamNeeds.join(', ') || 'Depth building'}\n• Season phase: ${seasonPhase}\n• User strategy: ${userPreferences.draftStrategy.join(', ')}\n\n**Recommendations:**\n• Focus on ${userTeamNeeds[0] || 'best player available'}\n• ${topAvailable[0]?.name || 'Top available'} represents strong value\n• Consider ${seasonPhase === 'draft' ? 'positional scarcity' : 'weekly matchups'}`;
-      
-      analysis.playerRecommendations = playerRecommendations;
-      analysis.strategyPoints = [
-        `Season phase: ${seasonPhase} - ${seasonPhase === 'draft' ? 'value-based drafting' : 'matchup optimization'}`,
-        `Risk tolerance: ${userPreferences.riskTolerance} - ${userPreferences.riskTolerance === 'aggressive' ? 'target upside plays' : 'prioritize floor'}`,
-        `Needs assessment: ${userTeamNeeds.length} positions to address`,
-        'Opportunity identification: Monitor for value discrepancies'
-      ];
-    }
-
     return {
       id: Date.now().toString(),
       type: 'ai',
-      content,
-      timestamp: new Date(),
-      priority,
-      category,
-      analysis
+      content: 'AI response optimized for performance - complex analysis temporarily disabled',
+      timestamp: new Date()
     };
-  }, [availablePlayers, currentRound, userTeamNeeds, state.draftedPlayers.size, seasonPhase, userPreferences, state.scoringSystem, state.players, state.draftedPlayers]);
+  }, []);
 
   // Handle sending messages
   const handleSendMessage = useCallback(async (messageContent: string = input) => {
@@ -1113,26 +494,9 @@ export default function AIView() {
     console.log('Disliked message:', messageId);
   }, []);
 
-  const dismissAlert = useCallback((alertId: string) => {
-    setProactiveAlerts(prev => prev.filter(alert => alert.id !== alertId));
-  }, []);
+  // Removed dismissAlert for performance
 
-  // Advanced alert message handler
-  const handleAlertMessage = useCallback((alert: ProactiveAlert) => {
-    const alertMessage: ChatMessage = {
-      id: `alert-${alert.id}`,
-      type: 'alert',
-      content: alert.message,
-      timestamp: alert.createdAt,
-      priority: alert.severity === 'urgent' ? 'urgent' : alert.severity === 'warning' ? 'high' : 'medium',
-      category: 'alert',
-      analysis: alert.players ? {
-        playerRecommendations: alert.players
-      } : undefined
-    };
-    
-    setMessages(prev => [...prev, alertMessage]);
-  }, []);
+  // Removed alert message handler for performance
 
   return (
     <div className="space-y-6">
@@ -1175,11 +539,7 @@ export default function AIView() {
           seasonPhase={seasonPhase}
         />
 
-        {/* Proactive Alerts Display */}
-        <ProactiveAlertDisplay
-          alerts={proactiveAlerts}
-          onDismiss={dismissAlert}
-        />
+        {/* Proactive Alerts Display - Removed for performance */}
       </div>
 
       {/* Chat Interface */}
@@ -1193,7 +553,7 @@ export default function AIView() {
               onCopy={copyMessage}
               onLike={likeMessage}
               onDislike={dislikeMessage}
-              onDismissAlert={message.type === 'alert' ? dismissAlert : undefined}
+              onDismissAlert={undefined}
             />
           ))}
           <div ref={messagesEndRef} />

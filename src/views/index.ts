@@ -13,6 +13,7 @@ export const TrackerView = lazy(() => import('./TrackerView'));
 export const AIView = lazy(() => import('./AIView'));
 export const NewsView = lazy(() => import('./NewsView'));
 export const AdvancedAnalyticsView = lazy(() => import('./AdvancedAnalyticsView'));
+export const NFLLeagueSyncView = lazy(() => import('./NFLLeagueSyncView'));
 
 // Legacy view - always lazy loaded
 export const LegacyView = lazy(() => import('./LegacyFantasyFootballAnalyzer'));
@@ -25,5 +26,6 @@ export const preloadViews = {
   ai: () => import('./AIView'),
   news: () => import('./NewsView'),
   analytics: () => import('./AdvancedAnalyticsView'),
+  nflSync: () => import('./NFLLeagueSyncView'),
   legacy: () => import('./LegacyFantasyFootballAnalyzer')
 };

@@ -1,0 +1,75 @@
+import { useState, useCallback } from 'react';
+
+// Simplified ESPN API hook interfaces
+interface ESPNPlayer {
+  id: number;
+  name: string;
+  position: string;
+  team: string;
+  updated: Date;
+}
+
+interface ESPNRanking {
+  playerId: number;
+  rank: number;
+  updated: Date;
+}
+
+interface ESPNInjury {
+  playerId: number;
+  status: string;
+  description: string;
+  updated: Date;
+}
+
+interface ESPNProjection {
+  playerId: number;
+  projectedPoints: number;
+  updated: Date;
+}
+
+interface ESPNDataHook {
+  isInitialized: boolean;
+  isLoading: boolean;
+  error?: string;
+  lastUpdate?: Date;
+  players: ESPNPlayer[];
+  rankings: ESPNRanking[];
+  injuries: ESPNInjury[];
+  projections: ESPNProjection[];
+  refreshData: () => Promise<void>;
+  clearCache: () => void;
+}
+
+export function useESPNData(): ESPNDataHook {
+  const [isInitialized] = useState(true);
+  const [isLoading] = useState(false);
+  const [lastUpdate] = useState(new Date());
+
+  // Simple mock data - empty arrays to prevent crashes
+  const players: ESPNPlayer[] = [];
+  const rankings: ESPNRanking[] = [];
+  const injuries: ESPNInjury[] = [];
+  const projections: ESPNProjection[] = [];
+
+  // Placeholder functions
+  const refreshData = useCallback(async () => {
+    console.log('ESPN API refresh data - placeholder');
+  }, []);
+
+  const clearCache = useCallback(() => {
+    console.log('ESPN API clear cache - placeholder');
+  }, []);
+
+  return {
+    isInitialized,
+    isLoading,
+    lastUpdate,
+    players,
+    rankings,
+    injuries,
+    projections,
+    refreshData,
+    clearCache,
+  };
+}

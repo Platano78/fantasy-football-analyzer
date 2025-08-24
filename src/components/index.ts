@@ -32,6 +32,10 @@ export * from './draft';
 // Re-export all UI components
 export * from './ui';
 
+// ===== AI COMPONENTS =====
+// AI backend status and hybrid coaching components
+export { default as AIBackendStatus } from './ai/AIBackendStatus';
+
 // ===== PERFORMANCE OPTIMIZATION COMPONENTS =====
 // Lazy loading and code splitting utilities
 export { LazyWrapper, withLazyLoading, createLazyComponent } from './LazyWrapper';

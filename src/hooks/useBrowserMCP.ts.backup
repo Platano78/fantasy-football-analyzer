@@ -1,0 +1,117 @@
+import { useState, useCallback } from 'react';
+
+// Simplified mock state for Browser MCP integration
+interface BrowserMCPState {
+  isInitialized: boolean;
+  error?: string;
+  healthStatus: {
+    espn: boolean;
+    fantasypros: boolean;
+    nfl: boolean;
+    sleeper: boolean;
+  };
+  lastUpdate: Date;
+}
+
+interface BrowserMCPHook {
+  state: BrowserMCPState;
+  isAutoRefreshEnabled: boolean;
+  autoRefreshInterval: number;
+  rankings: any[];
+  injuries: any[];
+  news: any[];
+  liveUpdates: any[];
+  refreshAll: () => Promise<void>;
+  refreshNews: () => Promise<void>;
+  refreshRankings: () => Promise<void>;
+  refreshInjuries: () => Promise<void>;
+  startAutoRefresh: () => void;
+  stopAutoRefresh: () => void;
+  setAutoRefreshInterval: (interval: number) => void;
+  clearLiveUpdates: () => void;
+  clearCache: () => void;
+  checkHealth: () => void;
+}
+
+export function useBrowserMCP(playerIds: string[]): BrowserMCPHook {
+  const [state] = useState<BrowserMCPState>({
+    isInitialized: true,
+    healthStatus: {
+      espn: true,
+      fantasypros: true,
+      nfl: true,
+      sleeper: true,
+    },
+    lastUpdate: new Date(),
+  });
+
+  const [isAutoRefreshEnabled] = useState(false);
+  const [autoRefreshInterval] = useState(60000);
+
+  // Simple mock data arrays
+  const rankings = [];
+  const injuries = [];
+  const news = [];
+  const liveUpdates = [];
+
+  // Placeholder functions
+  const refreshAll = useCallback(async () => {
+    console.log('Browser MCP refresh all - placeholder');
+  }, []);
+
+  const refreshNews = useCallback(async () => {
+    console.log('Browser MCP refresh news - placeholder');
+  }, []);
+
+  const refreshRankings = useCallback(async () => {
+    console.log('Browser MCP refresh rankings - placeholder');
+  }, []);
+
+  const refreshInjuries = useCallback(async () => {
+    console.log('Browser MCP refresh injuries - placeholder');
+  }, []);
+
+  const startAutoRefresh = useCallback(() => {
+    console.log('Browser MCP start auto refresh - placeholder');
+  }, []);
+
+  const stopAutoRefresh = useCallback(() => {
+    console.log('Browser MCP stop auto refresh - placeholder');
+  }, []);
+
+  const setAutoRefreshInterval = useCallback((interval: number) => {
+    console.log('Browser MCP set interval - placeholder', interval);
+  }, []);
+
+  const clearLiveUpdates = useCallback(() => {
+    console.log('Browser MCP clear updates - placeholder');
+  }, []);
+
+  const clearCache = useCallback(() => {
+    console.log('Browser MCP clear cache - placeholder');
+  }, []);
+
+  const checkHealth = useCallback(() => {
+    console.log('Browser MCP check health - placeholder');
+  }, []);
+
+  return {
+    state,
+    isAutoRefreshEnabled,
+    autoRefreshInterval,
+    rankings,
+    injuries,
+    news,
+    liveUpdates,
+    refreshAll,
+    refreshNews,
+    refreshRankings,
+    refreshInjuries,
+    startAutoRefresh,
+    stopAutoRefresh,
+    setAutoRefreshInterval,
+    clearLiveUpdates,
+    clearCache,
+    checkHealth,
+  };
+}
