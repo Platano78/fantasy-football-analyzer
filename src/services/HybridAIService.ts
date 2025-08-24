@@ -1,6 +1,7 @@
 // Hybrid AI Service - Orchestrates between Local Gemini Advanced and Cloud Gemini Enterprise
 // Provides intelligent backend switching and fantasy football AI coaching
 
+import { config } from '@/config/environment';
 import { Player, Position } from '@/types';
 
 // AI Backend Types
@@ -690,15 +691,57 @@ class CloudGeminiService {
   }
 }
 
+// Dummy Local Gemini Service for when it's disabled
+class DummyLocalGeminiService {
+  private status: AIBackendStatus;
+
+  constructor() {
+    this.status = {
+      backend: 'local',
+      available: false,
+      responseTime: 0,
+      lastHealthCheck: new Date(),
+      errorCount: 0,
+      qualityScore: 0,
+      connectionType: 'none'
+    };
+  }
+
+  public async query(request: FantasyAIRequest): Promise<FantasyAIResponse> {
+    throw new Error('Local Gemini service is disabled.');
+  }
+
+  public getStatus(): AIBackendStatus {
+    return { ...this.status };
+  }
+
+  public getCircuitBreakerStatus() {
+    return {
+      state: 'open' as const,
+      failureCount: 999,
+      nextAttemptIn: 0
+    };
+  }
+
+  public disconnect(): void {
+    // No-op
+  }
+}
+
 // Main Hybrid AI Service
 class HybridAIService {
-  private localService: LocalGeminiService;
+  private localService: LocalGeminiService | DummyLocalGeminiService;
   private cloudService: CloudGeminiService;
   private subscribers: Map<string, (status: Record<AIBackend, AIBackendStatus>) => void> = new Map();
   private statusUpdateInterval: NodeJS.Timeout | null = null;
 
   constructor() {
-    this.localService = new LocalGeminiService();
+    if (config.FEATURES.LOCAL_GEMINI && config.LOCAL_GEMINI_ENABLED) {
+      this.localService = new LocalGeminiService(config.LOCAL_GEMINI_URL);
+    } else {
+      console.log('🚫 Local Gemini disabled - using cloud/offline fallback');
+      this.localService = new DummyLocalGeminiService();
+    }
     this.cloudService = new CloudGeminiService();
     this.startStatusUpdates();
   }

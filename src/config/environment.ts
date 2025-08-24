@@ -220,11 +220,11 @@ export const buildConfig = (): EnvironmentConfig => {
     // Local Gemini Bridge Configuration
     LOCAL_GEMINI_URL: parseString(
       import.meta.env?.VITE_LOCAL_GEMINI_URL,
-      'http://localhost:3001'
+      '' // Production-safe default: empty string
     ),
     LOCAL_GEMINI_WS_URL: parseString(
       import.meta.env?.VITE_LOCAL_GEMINI_WS_URL,
-      'ws://localhost:3001/ws'
+      '' // Production-safe default: empty string
     ),
     LOCAL_GEMINI_ENABLED: parseBoolean(
       import.meta.env?.VITE_LOCAL_GEMINI_ENABLED,

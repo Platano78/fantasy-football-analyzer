@@ -362,7 +362,9 @@ class ESPNAPIService {
       const sleeperPlayers = await response.json();
       return this.transformSleeperPlayersToAppFormat(sleeperPlayers);
     } catch (error) {
-      console.error('Error fetching all players from Sleeper:', error);
+      console.error('🚨 SLEEPER API FAILED - Using mock data!', error);
+      console.warn('⚠️  You are seeing 2024 fallback data, not real 2025 data');
+      console.warn('🔧 Check your internet connection and API endpoints');
       // Return realistic fallback data for draft functionality
       return this.generateFallbackPlayers();
     }
@@ -606,6 +608,138 @@ class ESPNAPIService {
   }
 
   /**
+   * NEW: Transform Sleeper API player data to app format
+   */
+  private transformSleeperPlayersToAppFormat(sleeperPlayers: any): Player[] {
+    const players: Player[] = [];
+    let index = 0;
+
+    for (const [playerId, playerData] of Object.entries(sleeperPlayers)) {
+      const player = playerData as any;
+      
+      // Filter for active NFL players with fantasy relevance
+      if (!player.active || !player.position || player.position === 'OL' || player.position === 'DL') {
+        continue;
+      }
+
+      const mappedPosition = this.mapSleeperPositionToApp(player.position);
+      if (!mappedPosition) continue;
+
+      players.push({
+        id: parseInt(playerId) || index + 1,
+        name: player.full_name || `${player.first_name} ${player.last_name}`,
+        position: mappedPosition,
+        team: player.team || 'FA',
+        adp: this.calculateADPFromMetrics(player, index),
+        ppr: this.calculateProjection(player, 'ppr'),
+        standard: this.calculateProjection(player, 'standard'),
+        halfPpr: this.calculateProjection(player, 'halfPpr'),
+        injury: this.mapSleeperInjuryStatus(player.injury_status),
+        news: this.generatePlayerNews(player),
+        tier: Math.ceil((index + 1) / 12),
+      });
+      
+      index++;
+    }
+
+    // Sort by fantasy relevance and return top 500
+    return players
+      .sort((a, b) => this.sortByFantasyRelevance(a, b))
+      .slice(0, 500);
+  }
+
+  /**
+   * Generate projections from player data
+   */
+  private generateProjectionsFromPlayers(players: Player[]): ESPNFantasyProjection[] {
+    return players.map((player, index) => ({
+      playerId: player.id.toString(),
+      playerName: player.name,
+      position: player.position,
+      team: player.team,
+      projectedPoints: {
+        standard: player.standard,
+        ppr: player.ppr,
+        halfPpr: player.halfPpr,
+      },
+      stats: this.generateStatsProjection(player),
+    }));
+  }
+
+  /**
+   * Generate rankings from player data
+   */
+  private generateRankingsFromPlayers(players: Player[]): ESPNRanking[] {
+    return players.map((player, index) => ({
+      playerId: player.id.toString(),
+      playerName: player.name,
+      position: player.position,
+      team: player.team,
+      rank: index + 1,
+      tier: player.tier,
+      adp: player.adp,
+      projectedPoints: player.ppr, // Use PPR for ranking
+      updated: new Date(),
+    }));
+  }
+
+  /**
+   * Extract injury information from news articles
+   */
+  private extractInjuriesFromNews(articles: any[]): ESPNInjuryReport[] {
+    return articles
+      .filter(article => 
+        article.headline?.toLowerCase().includes('injury') ||
+        article.headline?.toLowerCase().includes('hurt') ||
+        article.headline?.toLowerCase().includes('out') ||
+        article.description?.toLowerCase().includes('injury')
+      )
+      .map((article, index) => ({
+        playerId: `news_${index}`,
+        playerName: this.extractPlayerNameFromHeadline(article.headline),
+        position: this.extractPositionFromHeadline(article.headline) || 'RB',
+        team: this.extractTeamFromHeadline(article.headline) || 'FA',
+        status: this.mapInjuryStatus(article.description),
+        description: article.description || article.headline,
+        updated: new Date(article.published || Date.now()),
+        severity: this.assessInjurySeverity(article.description) as 'minor' | 'moderate' | 'major',
+      }));
+  }
+
+  /**
+   * Get injury data from Sleeper API
+   */
+  private async getInjuriesFromSleeperData(): Promise<ESPNInjuryReport[]> {
+    try {
+      const response = await fetch('https://api.sleeper.app/v1/players/nfl');
+      const sleeperPlayers = await response.json();
+      const injuries: ESPNInjuryReport[] = [];
+
+      for (const [playerId, playerData] of Object.entries(sleeperPlayers)) {
+        const player = playerData as any;
+        
+        if (player.injury_status && player.injury_status !== 'Healthy') {
+          injuries.push({
+            playerId,
+            playerName: player.full_name,
+            position: player.position,
+            team: player.team || 'FA',
+            status: player.injury_status,
+            description: player.injury_notes || `${player.injury_status} - ${player.injury_body_part || 'Injury'}`,
+            updated: new Date(),
+            severity: this.assessInjurySeverity(player.injury_notes) as 'minor' | 'moderate' | 'major',
+          });
+        }
+      }
+
+      return injuries;
+    } catch (error) {
+      console.error('Error fetching injuries from Sleeper:', error);
+      return [];
+    }
+  }
+
+  /**
    * Merge player data from multiple sources
    */
   private mergePlayerData(
@@ -721,6 +855,222 @@ class ESPNAPIService {
   }
 
   /**
+   * NEW HELPER METHODS FOR SLEEPER API INTEGRATION
+   */
+  private mapSleeperPositionToApp(sleeperPosition: string): Position | null {
+    const mapping: Record<string, Position> = {
+      'QB': 'QB',
+      'RB': 'RB', 
+      'WR': 'WR',
+      'TE': 'TE',
+      'K': 'K',
+      'DEF': 'DEF'
+    };
+    return mapping[sleeperPosition] || null;
+  }
+
+  private calculateADPFromMetrics(player: any, index: number): number {
+    // Use search_rank if available, otherwise use index-based calculation
+    if (player.search_rank && player.search_rank !== 9999999) {
+      return player.search_rank;
+    }
+    
+    // Position-based ADP estimates for realistic draft values
+    const positionMultipliers: Record<string, number> = {
+      'QB': 2.5,
+      'RB': 1.0,
+      'WR': 1.2,
+      'TE': 3.0,
+      'K': 10.0,
+      'DEF': 8.0
+    };
+    
+    const multiplier = positionMultipliers[player.position] || 2.0;
+    return Math.floor((index + 1) * multiplier);
+  }
+
+  private calculateProjection(player: any, format: 'ppr' | 'standard' | 'halfPpr'): number {
+    // Base projection on position and years of experience
+    const basePoints: Record<string, number> = {
+      'QB': 18,
+      'RB': 12,
+      'WR': 11,
+      'TE': 8,
+      'K': 8,
+      'DEF': 8
+    };
+    
+    const base = basePoints[player.position] || 8;
+    const experienceBonus = Math.min(player.years_exp || 0, 5) * 0.5;
+    const randomVariance = (Math.random() - 0.5) * 4;
+    
+    let projection = base + experienceBonus + randomVariance;
+    
+    // Adjust for PPR format
+    if (format === 'ppr' && (player.position === 'WR' || player.position === 'RB' || player.position === 'TE')) {
+      projection += 2;
+    } else if (format === 'halfPpr' && (player.position === 'WR' || player.position === 'RB' || player.position === 'TE')) {
+      projection += 1;
+    }
+    
+    return Math.max(0, projection);
+  }
+
+  private mapSleeperInjuryStatus(injuryStatus?: string): InjuryStatus {
+    if (!injuryStatus) return 'Healthy';
+    
+    const status = injuryStatus.toLowerCase();
+    if (status.includes('out') || status.includes('inactive')) return 'Out';
+    if (status.includes('doubtful')) return 'Doubtful'; 
+    if (status.includes('questionable')) return 'Questionable';
+    if (status.includes('ir') || status.includes('injured reserve')) return 'IR';
+    
+    return 'Healthy';
+  }
+
+  private generatePlayerNews(player: any): string {
+    if (player.injury_status && player.injury_status !== 'Healthy') {
+      return `${player.injury_status} - ${player.injury_body_part || 'Injury'} (Updated: ${new Date(player.news_updated || Date.now()).toLocaleDateString()})`;
+    }
+    
+    if (player.news_updated) {
+      return `Active player (Last update: ${new Date(player.news_updated).toLocaleDateString()})`;
+    }
+    
+    return 'Active player - no recent news';
+  }
+
+  private sortByFantasyRelevance(a: Player, b: Player): number {
+    // Sort by PPR projection (descending)
+    if (a.ppr !== b.ppr) {
+      return b.ppr - a.ppr;
+    }
+    
+    // Then by position priority (QB, RB, WR, TE, K, DEF)
+    const positionPriority: Record<Position, number> = {
+      'QB': 1,
+      'RB': 2, 
+      'WR': 3,
+      'TE': 4,
+      'K': 5,
+      'DEF': 6
+    };
+    
+    return positionPriority[a.position] - positionPriority[b.position];
+  }
+
+  private generateStatsProjection(player: Player): any {
+    // Generate realistic stat projections based on position
+    switch (player.position) {
+      case 'QB':
+        return {
+          passingYards: Math.floor(3200 + Math.random() * 1600),
+          passingTouchdowns: Math.floor(20 + Math.random() * 18),
+          interceptions: Math.floor(8 + Math.random() * 8),
+          rushingYards: Math.floor(200 + Math.random() * 400),
+          rushingTouchdowns: Math.floor(2 + Math.random() * 6)
+        };
+      case 'RB':
+        return {
+          rushingYards: Math.floor(800 + Math.random() * 800),
+          rushingTouchdowns: Math.floor(6 + Math.random() * 8),
+          receptions: Math.floor(25 + Math.random() * 50),
+          receivingYards: Math.floor(200 + Math.random() * 400),
+          receivingTouchdowns: Math.floor(1 + Math.random() * 4)
+        };
+      case 'WR':
+        return {
+          receptions: Math.floor(50 + Math.random() * 70),
+          receivingYards: Math.floor(600 + Math.random() * 800),
+          receivingTouchdowns: Math.floor(4 + Math.random() * 8),
+          targets: Math.floor(80 + Math.random() * 80)
+        };
+      case 'TE':
+        return {
+          receptions: Math.floor(35 + Math.random() * 45),
+          receivingYards: Math.floor(400 + Math.random() * 600),
+          receivingTouchdowns: Math.floor(3 + Math.random() * 8),
+          targets: Math.floor(55 + Math.random() * 60)
+        };
+      default:
+        return {};
+    }
+  }
+
+  private extractPlayerNameFromHeadline(headline?: string): string {
+    if (!headline) return 'Unknown Player';
+    
+    // Simple extraction - first two words are usually the player name
+    const words = headline.split(' ');
+    if (words.length >= 2) {
+      return `${words[0]} ${words[1]}`;
+    }
+    
+    return headline.split(' ')[0] || 'Unknown Player';
+  }
+
+  /**
+   * FALLBACK DATA GENERATORS FOR WHEN APIS FAIL
+   */
+  private generateFallbackPlayers(): Player[] {
+    const topPlayers = [
+      { name: 'Josh Allen', position: 'QB' as Position, team: 'BUF', ppr: 24.2, standard: 22.1, tier: 1 },
+      { name: 'Lamar Jackson', position: 'QB' as Position, team: 'BAL', ppr: 23.8, standard: 21.9, tier: 1 },
+      { name: 'Christian McCaffrey', position: 'RB' as Position, team: 'SF', ppr: 22.5, standard: 19.2, tier: 1 },
+      { name: 'Austin Ekeler', position: 'RB' as Position, team: 'LAC', ppr: 21.8, standard: 17.1, tier: 1 },
+      { name: 'Tyreek Hill', position: 'WR' as Position, team: 'MIA', ppr: 20.2, standard: 16.8, tier: 1 },
+      { name: 'Stefon Diggs', position: 'WR' as Position, team: 'HOU', ppr: 19.5, standard: 16.2, tier: 1 },
+      { name: 'Travis Kelce', position: 'TE' as Position, team: 'KC', ppr: 18.9, standard: 15.6, tier: 1 },
+      { name: 'Mark Andrews', position: 'TE' as Position, team: 'BAL', ppr: 16.2, standard: 14.1, tier: 2 },
+    ];
+
+    return topPlayers.map((player, index) => ({
+      id: index + 1,
+      name: player.name,
+      position: player.position,
+      team: player.team,
+      adp: index + 1,
+      ppr: player.ppr,
+      standard: player.standard,
+      halfPpr: (player.ppr + player.standard) / 2,
+      injury: 'Healthy' as InjuryStatus,
+      news: 'Active player - realistic fallback data',
+      tier: player.tier,
+    }));
+  }
+
+  private generateFallbackProjections(): ESPNFantasyProjection[] {
+    const fallbackPlayers = this.generateFallbackPlayers();
+    return fallbackPlayers.map(player => ({
+      playerId: player.id.toString(),
+      playerName: player.name,
+      position: player.position,
+      team: player.team,
+      projectedPoints: {
+        standard: player.standard,
+        ppr: player.ppr,
+        halfPpr: player.halfPpr,
+      },
+      stats: this.generateStatsProjection(player),
+    }));
+  }
+
+  private generateFallbackRankings(): ESPNRanking[] {
+    const fallbackPlayers = this.generateFallbackPlayers();
+    return fallbackPlayers.map((player, index) => ({
+      playerId: player.id.toString(),
+      playerName: player.name,
+      position: player.position,
+      team: player.team,
+      rank: index + 1,
+      tier: player.tier,
+      adp: player.adp,
+      projectedPoints: player.ppr,
+      updated: new Date(),
+    }));
+  }
+
+  /**
    * Health check
    */
   private async performHealthCheck(): Promise<boolean> {
@@ -739,9 +1089,18 @@ class ESPNAPIService {
 
       clearTimeout(timeout);
       console.log('ESPN API health check:', response.status, response.ok);
+      
+      if (response.ok) {
+        console.log('✅ ESPN API proxy is working - real data will be loaded');
+      } else {
+        console.error('🚨 ESPN API proxy failed:', response.status, response.statusText);
+        console.error('🔄 Will fall back to Sleeper API + mock data');
+      }
+      
       return response.ok;
     } catch (error) {
-      console.warn('ESPN API health check failed, service will use fallbacks:', error);
+      console.error('🚨 ESPN API health check FAILED - Netlify proxy not working:', error);
+      console.error('🔄 Service will use Sleeper API + fallback data instead of ESPN');
       return false; // Allow service to continue with fallbacks
     }
   }

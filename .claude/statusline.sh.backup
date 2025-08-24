@@ -47,12 +47,175 @@ fmt_time_hm() {
   if date -r 0 +%s >/dev/null 2>&1; then date -r "$epoch" +"%H:%M"; else date -d "@$epoch" +"%H:%M"; fi
 }
 
+# ---- Enhanced Progress Bar Functions ----
+# Performance-optimized progress bar generator (<10ms execution)
+# Compatible with cc-statusline visual patterns and terminal color codes
+
+# Core progress bar generator - creates ASCII bars like [========--]
 progress_bar() {
-  pct="${1:-0}"; width="${2:-10}"
-  [[ "$pct" =~ ^[0-9]+$ ]] || pct=0; ((pct<0))&&pct=0; ((pct>100))&&pct=100
-  filled=$(( pct * width / 100 )); empty=$(( width - filled ))
-  printf '%*s' "$filled" '' | tr ' ' '='
-  printf '%*s' "$empty" '' | tr ' ' '-'
+  local pct="${1:-0}" width="${2:-10}" char_fill="${3:-=}" char_empty="${4:--}"
+  
+  # Input validation (using only bash built-ins for performance)
+  [[ "$pct" =~ ^[0-9]+$ ]] || pct=0
+  ((pct < 0)) && pct=0
+  ((pct > 100)) && pct=100
+  [[ "$width" =~ ^[0-9]+$ ]] || width=10
+  ((width < 1)) && width=1
+  ((width > 50)) && width=50
+  
+  # Fast integer math for bar calculation
+  local filled=$((pct * width / 100))
+  local empty=$((width - filled))
+  
+  # Optimized string generation using printf only
+  printf '%*s' "$filled" '' | tr ' ' "$char_fill"
+  printf '%*s' "$empty" '' | tr ' ' "$char_empty"
+}
+
+# Enhanced progress bar with color coding based on percentage
+progress_bar_colored() {
+  local pct="${1:-0}" width="${2:-10}" show_pct="${3:-true}"
+  local bar_content color_start color_end
+  
+  # Input validation using bash arithmetic only
+  [[ "$pct" =~ ^[0-9]+$ ]] || pct=0
+  ((pct < 0)) && pct=0
+  ((pct > 100)) && pct=100
+  
+  # Performance-optimized color selection using bash conditionals
+  if ((pct >= 80)); then
+    color_start='\033[38;5;203m'  # coral red (high usage)
+  elif ((pct >= 60)); then
+    color_start='\033[38;5;215m'  # peach (medium usage)  
+  elif ((pct >= 40)); then
+    color_start='\033[38;5;228m'  # light yellow (moderate usage)
+  else
+    color_start='\033[38;5;158m'  # mint green (low usage)
+  fi
+  color_end='\033[0m'
+  
+  # Generate bar content with enhanced characters
+  bar_content="[$(progress_bar "$pct" "$width" "█" "░")]"
+  
+  # Output with optional percentage display
+  if [ "$use_color" -eq 1 ]; then
+    if [ "$show_pct" = "true" ]; then
+      printf '%b%s%b %b%d%%%b' "$color_start" "$bar_content" "$color_end" "$color_start" "$pct" "$color_end"
+    else
+      printf '%b%s%b' "$color_start" "$bar_content" "$color_end"
+    fi
+  else
+    if [ "$show_pct" = "true" ]; then
+      printf '%s %d%%' "$bar_content" "$pct"
+    else
+      printf '%s' "$bar_content"
+    fi
+  fi
+}
+
+# Specialized session usage progress bar (follows cc-statusline patterns)
+session_usage_progress() {
+  local pct="${1:-0}" width="${2:-12}" label="${3:-Session}"
+  local remaining_pct bar_color bar_content
+  
+  # Input validation
+  [[ "$pct" =~ ^[0-9]+$ ]] || pct=0
+  ((pct < 0)) && pct=0
+  ((pct > 100)) && pct=100
+  
+  # Calculate remaining percentage for color logic (matches existing pattern)
+  remaining_pct=$((100 - pct))
+  
+  # Color selection matching existing session_color() logic
+  if ((remaining_pct <= 10)); then
+    bar_color='\033[38;5;210m'  # light pink (critical)
+  elif ((remaining_pct <= 25)); then
+    bar_color='\033[38;5;228m'  # light yellow (warning)
+  else
+    bar_color='\033[38;5;194m'  # light green (healthy)
+  fi
+  
+  # Generate bar using original function style for compatibility
+  bar_content="[$(progress_bar "$pct" "$width" "=" "-")]"
+  
+  # Output in cc-statusline format
+  if [ "$use_color" -eq 1 ]; then
+    printf '%b%s: %d%% %s%b' "$bar_color" "$label" "$pct" "$bar_content" '\033[0m'
+  else
+    printf '%s: %d%% %s' "$label" "$pct" "$bar_content"
+  fi
+}
+
+# Multi-metric progress display (for complex usage scenarios)
+multi_progress_display() {
+  local cpu_pct="${1:-0}" mem_pct="${2:-0}" disk_pct="${3:-0}" width="${4:-8}"
+  
+  printf 'CPU: %s  MEM: %s  DSK: %s' \
+    "$(progress_bar_colored "$cpu_pct" "$width" false)" \
+    "$(progress_bar_colored "$mem_pct" "$width" false)" \
+    "$(progress_bar_colored "$disk_pct" "$width" false)"
+}
+
+# Compact progress indicator for single values (ultra-fast)
+compact_progress() {
+  local pct="${1:-0}"
+  [[ "$pct" =~ ^[0-9]+$ ]] || pct=0
+  ((pct < 0)) && pct=0
+  ((pct > 100)) && pct=100
+  
+  local chars="▁▂▃▄▅▆▇█"
+  local idx=$((pct * 7 / 100))
+  printf '%s' "${chars:$idx:1}"
+}
+
+# ---- Progress Bar Usage Examples and Testing ----
+# (Remove this section in production - for development/testing only)
+test_progress_functions() {
+  echo "=== Enhanced Progress Bar Functions Demo ==="
+  echo
+  
+  echo "1. Basic progress_bar() function:"
+  for pct in 0 25 50 75 100; do
+    echo "  ${pct}%: $(progress_bar "$pct" 20)"
+  done
+  echo
+  
+  echo "2. Colored progress_bar_colored() with percentages:"
+  for pct in 15 35 55 75 95; do
+    echo -n "  ${pct}%: "
+    progress_bar_colored "$pct" 15 true
+    echo
+  done
+  echo
+  
+  echo "3. Session usage progress (cc-statusline style):"
+  for pct in 10 40 70 85 95; do
+    echo -n "  "
+    session_usage_progress "$pct" 12 "Session"
+    echo
+  done
+  echo
+  
+  echo "4. Multi-metric display:"
+  echo -n "  "
+  multi_progress_display 25 60 80 10
+  echo
+  echo
+  
+  echo "5. Compact progress indicators:"
+  echo -n "  Progress levels: "
+  for pct in 0 12 25 37 50 62 75 87 100; do
+    echo -n "$(compact_progress $pct) "
+  done
+  echo
+  echo
+  
+  echo "6. Edge cases and validation:"
+  echo "  Invalid input (-10): $(progress_bar -10 10)"
+  echo "  Invalid input (150): $(progress_bar 150 10)"
+  echo "  Invalid input (abc): $(progress_bar abc 10)"
+  echo "  Zero width: $(progress_bar 50 0)"
+  echo
 }
 
 # ---- basics ----

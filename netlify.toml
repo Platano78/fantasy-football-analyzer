@@ -22,7 +22,7 @@
     X-Frame-Options = "DENY"
     X-XSS-Protection = "1; mode=block"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://site.api.espn.com https://fantasysports.yahooapis.com https://api.sleeper.app"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://site.api.espn.com https://fantasysports.yahooapis.com https://api.sleeper.app https://generativelanguage.googleapis.com"
 
 # SPA Routing - Handle client-side routing
 [[redirects]]
@@ -38,12 +38,13 @@
   force = true
   headers = {X-From = "Netlify", X-ESPN-Proxy = "Active", Access-Control-Allow-Origin = "*"}
 
-[[redirects]]
-  from = "/api/espn-fantasy/*"
-  to = "https://site.api.espn.com/apis/v2/sports/football/nfl/fantasy/:splat"
-  status = 200
-  force = true
-  headers = {X-From = "Netlify", X-ESPN-Fantasy-Proxy = "Active", Access-Control-Allow-Origin = "*"}
+# REMOVED - ESPN Fantasy endpoints are deprecated and return 404
+# [[redirects]]
+#   from = "/api/espn-fantasy/*"
+#   to = "https://site.api.espn.com/apis/v2/sports/football/nfl/fantasy/:splat"
+#   status = 200
+#   force = true
+#   headers = {X-From = "Netlify", X-ESPN-Fantasy-Proxy = "Active", Access-Control-Allow-Origin = "*"}
 
 [[redirects]]
   from = "/api/sleeper/*"
