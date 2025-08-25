@@ -19,7 +19,10 @@ export function extractLeagueId(provider: DraftRoomProvider, url: string): strin
         return urlObj.searchParams.get('leagueId');
       
       case 'nfl':
-        // NFL.com format: fantasy.nfl.com/league/{leagueId}/draftroom
+        // NFL.com format: fantasy.nfl.com/league/{leagueId}/draftroom OR draftclient with leagueId param
+        if (url.includes('draftclient') && urlObj.searchParams.has('leagueId')) {
+          return urlObj.searchParams.get('leagueId');
+        }
         const nflParts = urlObj.pathname.split('/');
         return nflParts[2] || null;
       
@@ -54,7 +57,7 @@ export function validateDraftRoomUrl(provider: DraftRoomProvider, url: string): 
         return hostname.includes('fantasy.espn.com') && url.includes('leagueId');
       
       case 'nfl':
-        return hostname.includes('fantasy.nfl.com') && url.includes('draftroom');
+        return hostname.includes('fantasy.nfl.com') && (url.includes('draftroom') || url.includes('draftclient'));
       
       case 'yahoo':
         return hostname.includes('fantasysports.yahoo.com') && url.includes('draft');
@@ -90,7 +93,7 @@ export function getProviderDisplayName(provider: DraftRoomProvider): string {
 export function getProviderExampleUrl(provider: DraftRoomProvider): string {
   const examples: Record<DraftRoomProvider, string> = {
     espn: 'https://fantasy.espn.com/football/draft?leagueId=123456',
-    nfl: 'https://fantasy.nfl.com/league/123456/draftroom',
+    nfl: 'https://fantasy.nfl.com/draftclient?leagueId=123456&teamId=1',
     yahoo: 'https://football.fantasysports.yahoo.com/league/123456/draft',
     sleeper: 'https://sleeper.app/draft/123456'
   };

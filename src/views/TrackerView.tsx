@@ -341,7 +341,7 @@ const DraftRoomURLInput = memo(({
           <p>Supported URLs:</p>
           <ul className="list-disc list-inside mt-1 space-y-1">
             <li>ESPN: fantasy.espn.com/football/draft?leagueId=...</li>
-            <li>NFL: fantasy.nfl.com/league/.../draftroom</li>
+            <li>NFL: fantasy.nfl.com/draftclient?leagueId=...</li>
             <li>Yahoo: football.fantasysports.yahoo.com/league/.../draft</li>
             <li>Sleeper: sleeper.app/draft/...</li>
           </ul>
