@@ -442,6 +442,101 @@ const ConnectionStatusDisplay = memo(({
 
 ConnectionStatusDisplay.displayName = 'ConnectionStatusDisplay';
 
+// Live Draft Room Data Display
+const LiveDraftRoomData = memo(({ 
+  draftData,
+  connection 
+}: { 
+  draftData: any;
+  connection: DraftRoomConnection; 
+}) => {
+  if (!draftData) return null;
+
+  return (
+    <div className="bg-white rounded-lg border border-green-200 p-4">
+      <h4 className="font-semibold text-gray-900 flex items-center gap-2 mb-4">
+        <Target className="w-4 h-4 text-green-600" />
+        Live Draft Room - {draftData.leagueName}
+      </h4>
+      
+      <div className="space-y-4">
+        {/* Current Pick Status */}
+        <div className="bg-gradient-to-r from-blue-50 to-green-50 p-3 rounded-lg">
+          <div className="grid grid-cols-2 gap-4 text-center">
+            <div>
+              <div className="text-xl font-bold text-blue-600">Round {draftData.currentRound}</div>
+              <div className="text-xs text-gray-600">Current Round</div>
+            </div>
+            <div>
+              <div className="text-xl font-bold text-green-600">Pick {draftData.currentPick}</div>
+              <div className="text-xs text-gray-600">of {draftData.totalRounds * draftData.totalTeams}</div>
+            </div>
+          </div>
+          <div className="text-center mt-2">
+            <div className="text-lg font-semibold text-gray-800">{draftData.draftPhase}</div>
+            <div className="text-sm text-gray-600 mt-1">{draftData.recommendedStrategy}</div>
+          </div>
+        </div>
+
+        {/* Timer */}
+        {draftData.isDraftActive && (
+          <div className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-center gap-2">
+              <Timer className="w-4 h-4 text-yellow-600" />
+              <span className="text-sm font-medium text-yellow-800">Time Remaining</span>
+            </div>
+            <div className="text-lg font-bold text-yellow-800">{Math.floor(draftData.timeRemaining / 60)}:{(draftData.timeRemaining % 60).toString().padStart(2, '0')}</div>
+          </div>
+        )}
+
+        {/* Recent Picks */}
+        {draftData.recentPicks && draftData.recentPicks.length > 0 && (
+          <div>
+            <h5 className="text-sm font-medium text-gray-700 mb-2">Recent Picks</h5>
+            <div className="space-y-2">
+              {draftData.recentPicks.map((pick: any, index: number) => (
+                <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm font-medium text-gray-900">{pick.player}</div>
+                    <div className="text-xs text-gray-500">({pick.position})</div>
+                  </div>
+                  <div className="text-xs text-gray-500">{pick.team}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Available Players by Position */}
+        {draftData.availablePositions && (
+          <div>
+            <h5 className="text-sm font-medium text-gray-700 mb-2">Available Players</h5>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              {Object.entries(draftData.availablePositions).map(([pos, count]) => (
+                <div key={pos} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                  <span className="font-medium">{pos}</span>
+                  <span className="text-gray-600">{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Your Team Info */}
+        {draftData.myTeamId && (
+          <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
+            <div className="text-sm font-medium text-blue-800">
+              Your Team: Team {draftData.myTeamId} • League ID: {draftData.leagueId}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+LiveDraftRoomData.displayName = 'LiveDraftRoomData';
+
 // Memoized real-time sync indicators
 const SyncStatusIndicators = memo(({
   isLiveDraft,
@@ -699,10 +794,9 @@ export default function TrackerView() {
         dispatch({ type: 'UPDATE_LAST_SERVER_UPDATE', payload: new Date() });
         addNotification('success', 'Draft room data synced successfully');
         
-        // In a real implementation, you would update the draft state with result.data
+        // Update draft state with synced data
         if (result.data) {
-          // Update draft state based on synced data
-          // dispatch({ type: 'UPDATE_DRAFT_FROM_SYNC', payload: result.data });
+          dispatch({ type: 'UPDATE_DRAFT_FROM_SYNC', payload: result.data });
         }
       } else {
         dispatch({ type: 'UPDATE_CONNECTION_STATUS', payload: 'error' });
@@ -917,6 +1011,16 @@ export default function TrackerView() {
             </div>
           </div>
         </div>
+        
+        {/* Live Draft Room Data - shows synced information */}
+        {state.draftRoomState.connection && state.draftRoomState.syncedData && (
+          <div className="mt-6">
+            <LiveDraftRoomData 
+              draftData={state.draftRoomState.syncedData}
+              connection={state.draftRoomState.connection}
+            />
+          </div>
+        )}
       </div>
 
       {/* Draft Recommendations and Notifications Grid */}

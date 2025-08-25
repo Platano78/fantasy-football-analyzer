@@ -159,17 +159,46 @@ export async function simulateSync(connection: DraftRoomConnection): Promise<{
     };
   }
   
-  // Mock draft room data
+  // Generate realistic draft room data based on league ID
+  const isInjusticeLeague = connection.leagueId === '6317063';
+  const currentRound = isInjusticeLeague ? 17 : Math.floor(Math.random() * 17) + 1;
+  const totalTeams = 12;
+  const currentPick = ((currentRound - 1) * totalTeams) + Math.floor(Math.random() * totalTeams) + 1;
+  
+  // Late round typical picks for round 17
+  const lateRoundPicks = [
+    { player: 'Jerick McKinnon', team: 'Team 8', position: 'RB', round: 17 },
+    { player: 'Gus Edwards', team: 'Team 3', position: 'RB', round: 17 },
+    { player: 'Jakobi Meyers', team: 'Team 11', position: 'WR', round: 17 },
+    { player: 'Tyler Higbee', team: 'Team 6', position: 'TE', round: 17 },
+    { player: 'Carolina Panthers', team: 'Team 2', position: 'DEF', round: 17 },
+    { player: 'Jake Moody', team: 'Team 9', position: 'K', round: 17 }
+  ];
+  
   const mockData = {
-    currentPick: Math.floor(Math.random() * 10) + 1,
-    currentRound: Math.floor(Math.random() * 3) + 1,
-    isDraftActive: Math.random() > 0.7,
-    recentPicks: [
-      { player: 'Christian McCaffrey', team: 'Team 1', position: 'RB' },
-      { player: 'Travis Kelce', team: 'Team 2', position: 'TE' },
-      { player: 'Cooper Kupp', team: 'Team 3', position: 'WR' }
-    ],
-    timeRemaining: Math.floor(Math.random() * 90)
+    currentPick,
+    currentRound,
+    totalRounds: 17,
+    totalTeams,
+    isDraftActive: true,
+    leagueId: connection.leagueId,
+    leagueName: isInjusticeLeague ? 'Injustice League' : 'Fantasy League',
+    myTeamId: isInjusticeLeague ? 7 : Math.floor(Math.random() * 12) + 1,
+    timeRemaining: Math.floor(Math.random() * 90) + 30,
+    recentPicks: lateRoundPicks.slice(0, 3),
+    availablePositions: {
+      QB: currentRound > 12 ? Math.floor(Math.random() * 5) + 15 : Math.floor(Math.random() * 20) + 25,
+      RB: currentRound > 15 ? Math.floor(Math.random() * 8) + 35 : Math.floor(Math.random() * 15) + 45,
+      WR: currentRound > 15 ? Math.floor(Math.random() * 12) + 40 : Math.floor(Math.random() * 25) + 55,
+      TE: currentRound > 10 ? Math.floor(Math.random() * 8) + 20 : Math.floor(Math.random() * 15) + 25,
+      DEF: Math.floor(Math.random() * 15) + 20,
+      K: Math.floor(Math.random() * 12) + 18
+    },
+    draftPhase: currentRound <= 10 ? 'Early Rounds' : 
+               currentRound <= 15 ? 'Middle Rounds' : 'Late Rounds - Sleepers & Handcuffs',
+    recommendedStrategy: currentRound > 15 ? 
+      'Focus on handcuffs, sleepers, and position depth' :
+      'Fill remaining starting positions first'
   };
   
   return {

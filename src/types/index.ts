@@ -76,6 +76,7 @@ export interface DraftRoomState {
   syncInterval: number; // milliseconds
   isLiveDraft: boolean;
   lastServerUpdate: Date | null;
+  syncedData: any; // Stores synced draft room data from API
 }
 
 export interface FantasyFootballState {

@@ -17,7 +17,8 @@ const initialDraftRoomState: DraftRoomState = {
   autoSync: false,
   syncInterval: 30000, // 30 seconds
   isLiveDraft: false,
-  lastServerUpdate: null
+  lastServerUpdate: null,
+  syncedData: null
 };
 
 const initialState: FantasyFootballState = {
@@ -271,6 +272,15 @@ function fantasyFootballReducer(state: FantasyFootballState, action: FantasyFoot
         draftRoomState: {
           ...state.draftRoomState,
           lastServerUpdate: action.payload
+        }
+      };
+    
+    case 'UPDATE_DRAFT_FROM_SYNC':
+      return {
+        ...state,
+        draftRoomState: {
+          ...state.draftRoomState,
+          syncedData: action.payload
         }
       };
     
