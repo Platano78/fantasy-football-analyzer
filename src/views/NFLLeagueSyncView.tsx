@@ -7,7 +7,7 @@ import {
   NFLSyncError 
 } from '@/types/NFLLeagueTypes';
 import { nflLeagueService } from '@/services/NFLLeagueService';
-import NFLLeagueSyncer from '@/components/NFLLeagueSyncer';
+import { SimpleLeagueURLParser } from '@/components/SimpleLeagueURLParser';
 import LeagueSwitcher from '@/components/LeagueSwitcher';
 import NFLDraftCoach from '@/components/NFLDraftCoach';
 import { ManualLeagueEntry } from '@/components/ManualLeagueEntry';
@@ -19,10 +19,11 @@ import {
   Zap,
   Brain,
   FileText,
-  RotateCw
+  RotateCw,
+  Globe
 } from 'lucide-react';
 
-type ActiveModal = 'manual-entry' | 'draft-coach' | 'settings' | null;
+type ActiveModal = 'url-parser' | 'manual-entry' | 'draft-coach' | 'settings' | null;
 
 export const NFLLeagueSyncView: React.FC = () => {
   // State management
@@ -115,8 +116,34 @@ export const NFLLeagueSyncView: React.FC = () => {
   }, []);
 
   const handleAddLeague = useCallback(() => {
-    setActiveModal('manual-entry');
+    setActiveModal('url-parser');
   }, []);
+
+  const handleLeagueAdded = useCallback(async (league: NFLLeague) => {
+    try {
+      console.log('🔄 Adding league:', league.name);
+      await nflLeagueService.addLeague(league);
+      
+      // Update local state and persist to service
+      const updatedCollection = {
+        ...leagueCollection,
+        leagues: {
+          ...leagueCollection.leagues,
+          [league.id]: league
+        },
+        activeLeagueId: leagueCollection.activeLeagueId || league.id,
+        syncOrder: [...leagueCollection.syncOrder, league.id]
+      };
+      
+      // Persist the updated collection to trigger subscriptions
+      await nflLeagueService.updateLeagueCollection(updatedCollection);
+      setLeagueCollection(updatedCollection);
+      console.log('✅ League added successfully:', league.name);
+      setActiveModal(null);
+    } catch (error) {
+      console.error('❌ Failed to add league:', error);
+    }
+  }, [leagueCollection]);
 
   const handleRemoveLeague = useCallback(async (leagueId: string) => {
     try {
@@ -254,17 +281,64 @@ export const NFLLeagueSyncView: React.FC = () => {
 
       {/* Main Content */}
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* NFL League Syncer */}
-        <div>
-          <NFLLeagueSyncer
-            initialLeagues={leagueCollection.leagues}
-            onSyncComplete={(results) => {
-              setSyncResults(results);
-              console.log('🔄 Sync completed:', results);
-            }}
-            onSyncProgress={handleSyncProgress}
-            onSyncError={handleSyncError}
-          />
+        {/* Simple League List */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Your Leagues</h3>
+              <button
+                onClick={handleAddLeague}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                <Plus className="w-4 h-4" />
+                Add League
+              </button>
+            </div>
+          </div>
+          
+          <div className="p-6">
+            {Object.keys(leagueCollection.leagues).length === 0 ? (
+              <div className="text-center py-8">
+                <Globe className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h4 className="text-lg font-medium text-gray-900 mb-2">No Leagues Yet</h4>
+                <p className="text-gray-600 mb-4">Add your first NFL.com fantasy league to get started</p>
+                <button
+                  onClick={handleAddLeague}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mx-auto"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Your First League
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {Object.values(leagueCollection.leagues).map((league: any) => (
+                  <div key={league.id} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-semibold text-gray-900">{league.name}</h4>
+                      <button
+                        onClick={() => handleRemoveLeague(league.id)}
+                        className="text-red-600 hover:text-red-800 text-sm"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 text-sm text-gray-600">
+                      <div>
+                        <span className="font-medium">Teams:</span> {league.size}
+                      </div>
+                      <div>
+                        <span className="font-medium">Scoring:</span> {league.scoringType}
+                      </div>
+                      <div>
+                        <span className="font-medium">Status:</span> {league.draftStatus}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Status & Information Panel */}
@@ -422,6 +496,13 @@ export const NFLLeagueSyncView: React.FC = () => {
       </div>
 
       {/* Modals */}
+      <SimpleLeagueURLParser
+        isOpen={activeModal === 'url-parser'}
+        onClose={() => setActiveModal(null)}
+        onLeagueAdded={handleLeagueAdded}
+        onError={(error) => console.error('URL Parser Error:', error)}
+      />
+
       {activeModal === 'manual-entry' && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">

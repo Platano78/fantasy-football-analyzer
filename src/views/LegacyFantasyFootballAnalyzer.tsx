@@ -827,7 +827,7 @@ const FantasyFootballAnalyzer = () => {
     setIsTimerActive(true);
   }, [initializeDraft]);
 
-  const pauseDraftSimulation = useCallback(() => {
+  const pauseDraftTimer = useCallback(() => {
     setIsDraftSimulationActive(false);
     setIsTimerActive(false);
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -835,7 +835,7 @@ const FantasyFootballAnalyzer = () => {
   }, []);
 
   const resetDraftSimulation = useCallback(() => {
-    pauseDraftSimulation();
+    pauseDraftTimer();
     setDraftHistory([]);
     setDraftedPlayers(new Set());
     setCurrentOverallPick(1);
@@ -845,7 +845,7 @@ const FantasyFootballAnalyzer = () => {
     setDraftTimer(draftSettings.timePerPick);
     setTimerWarning(false);
     setShowTimerExpired(false);
-  }, [pauseDraftSimulation, draftSettings.timePerPick]);
+  }, [pauseDraftTimer, draftSettings.timePerPick]);
 
   // AI simulation effect
   useEffect(() => {
@@ -1876,7 +1876,7 @@ const FantasyFootballAnalyzer = () => {
                       </button>
                     ) : (
                       <button
-                        onClick={pauseDraftSimulation}
+                        onClick={pauseDraftTimer}
                         className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
                       >
                         <Pause className="w-4 h-4" />

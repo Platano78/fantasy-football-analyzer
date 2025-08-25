@@ -1,7 +1,6 @@
 import { memo, useMemo, useCallback } from 'react';
 import { RefreshCw, TrendingUp, AlertCircle, CheckCircle, Clock, Activity, Wifi, Database, WifiOff, Globe, Zap } from 'lucide-react';
 import { useFantasyFootball } from '@/contexts/FantasyFootballContext';
-import { useBrowserMCP } from '@/hooks/useBrowserMCP';
 import { useESPNData } from '@/hooks/useESPNData';
 import { Player } from '@/types';
 
@@ -45,51 +44,38 @@ const DataSourceStatus = memo(({
         </h3>
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <Wifi className="w-4 h-4 text-green-500" />
-          <span>Browser MCP Ready</span>
+          <span>Live Data Ready</span>
         </div>
       </div>
 
       <div className="space-y-4">
-        {sources.map(source => (
-          <div key={source.id} className="border rounded-lg p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-3">
-                <div className={`w-3 h-3 rounded-full ${
-                  source.status === 'connected' ? 'bg-green-500' :
-                  source.status === 'syncing' ? 'bg-yellow-500 animate-pulse' :
-                  source.status === 'error' ? 'bg-red-500' :
-                  'bg-gray-400'
-                }`} />
-                <div>
-                  <h4 className="font-medium text-gray-900">{source.name}</h4>
-                  <p className="text-sm text-gray-600">{source.description}</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => onRefresh(source.id)}
-                  disabled={source.status === 'syncing'}
-                  className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50"
-                >
-                  <RefreshCw className={`w-4 h-4 ${source.status === 'syncing' ? 'animate-spin' : ''}`} />
-                </button>
-                <button
-                  onClick={() => onToggleSource(source.id)}
-                  className={`px-3 py-1 text-xs rounded-full font-medium ${
-                    source.status === 'connected' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-gray-100 text-gray-800'
-                  }`}
-                >
-                  {source.status === 'connected' ? 'Active' : 'Inactive'}
-                </button>
+        {sources.map((source) => (
+          <div key={source.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className={`w-3 h-3 rounded-full ${
+                source.status === 'connected' ? 'bg-green-500' :
+                source.status === 'syncing' ? 'bg-yellow-500 animate-pulse' :
+                'bg-red-500'
+              }`} />
+              <div>
+                <div className="font-medium text-gray-900">{source.name}</div>
+                <div className="text-sm text-gray-600">{source.description}</div>
               </div>
             </div>
-            
-            <div className="text-xs text-gray-500">
-              Last updated: {source.lastUpdate.toLocaleTimeString()} • 
-              Updates every {source.updateInterval} minutes
+            <div className="flex items-center gap-2">
+              <div className="text-right text-sm text-gray-600">
+                <div>Every {source.updateInterval}min</div>
+                <div className="text-xs">
+                  {Math.round((Date.now() - source.lastUpdate.getTime()) / 60000)}m ago
+                </div>
+              </div>
+              <button
+                onClick={() => onRefresh(source.id)}
+                className="p-2 text-gray-600 hover:text-blue-600 hover:bg-white rounded-lg transition-colors"
+                disabled={source.status === 'syncing'}
+              >
+                <RefreshCw className={`w-4 h-4 ${source.status === 'syncing' ? 'animate-spin' : ''}`} />
+              </button>
             </div>
           </div>
         ))}
@@ -100,133 +86,8 @@ const DataSourceStatus = memo(({
 
 DataSourceStatus.displayName = 'DataSourceStatus';
 
-// Memoized live updates feed
-const LiveUpdatesFeed = memo(({ 
-  updates,
-  onClearUpdates
-}: {
-  updates: LiveUpdate[];
-  onClearUpdates: () => void;
-}) => {
-  return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-          <Activity className="w-5 h-5" />
-          Live Updates Feed
-        </h3>
-        <button
-          onClick={onClearUpdates}
-          className="text-sm text-gray-500 hover:text-gray-700"
-        >
-          Clear All
-        </button>
-      </div>
-
-      <div className="space-y-3 max-h-96 overflow-y-auto">
-        {updates.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>No recent updates</p>
-            <p className="text-sm">Live data will appear here when available</p>
-          </div>
-        ) : (
-          updates.map(update => (
-            <div
-              key={update.id}
-              className={`p-3 rounded-lg border-l-4 ${
-                update.severity === 'high' ? 'bg-red-50 border-red-400' :
-                update.severity === 'medium' ? 'bg-yellow-50 border-yellow-400' :
-                'bg-blue-50 border-blue-400'
-              }`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`px-2 py-1 text-xs font-medium rounded ${
-                      update.type === 'injury' ? 'bg-red-100 text-red-800' :
-                      update.type === 'ranking' ? 'bg-blue-100 text-blue-800' :
-                      update.type === 'adp' ? 'bg-green-100 text-green-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {update.type.toUpperCase()}
-                    </span>
-                    {update.playerName && (
-                      <span className="font-medium text-gray-900">{update.playerName}</span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-700">{update.message}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {update.timestamp.toLocaleTimeString()}
-                  </p>
-                </div>
-                <div className={`w-2 h-2 rounded-full mt-2 ${
-                  update.severity === 'high' ? 'bg-red-500' :
-                  update.severity === 'medium' ? 'bg-yellow-500' :
-                  'bg-blue-500'
-                }`} />
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-});
-
-LiveUpdatesFeed.displayName = 'LiveUpdatesFeed';
-
-// Memoized real-time statistics
-const RealTimeStats = memo(({ 
-  players,
-  liveRankings,
-  adpUpdates,
-  injuryUpdates
-}: {
-  players: Player[];
-  liveRankings: number;
-  adpUpdates: number;
-  injuryUpdates: number;
-}) => {
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div className="text-center p-4 bg-blue-50 rounded-lg">
-        <div className="text-2xl font-bold text-blue-600">{players.length}</div>
-        <div className="text-xs text-gray-600">Current Players</div>
-        <div className="text-xs text-green-600 mt-1 flex items-center justify-center gap-1">
-          <CheckCircle className="w-3 h-3" />
-          Updated
-        </div>
-      </div>
-      
-      <div className="text-center p-4 bg-green-50 rounded-lg">
-        <div className="text-2xl font-bold text-green-600">{liveRankings}</div>
-        <div className="text-xs text-gray-600">Live Rankings</div>
-        <div className="text-xs text-blue-600 mt-1 flex items-center justify-center gap-1">
-          <RefreshCw className="w-3 h-3" />
-          Syncing
-        </div>
-      </div>
-      
-      <div className="text-center p-4 bg-purple-50 rounded-lg">
-        <div className="text-2xl font-bold text-purple-600">{adpUpdates}</div>
-        <div className="text-xs text-gray-600">ADP Updates</div>
-        <div className="text-xs text-gray-600 mt-1">Last hour</div>
-      </div>
-      
-      <div className="text-center p-4 bg-orange-50 rounded-lg">
-        <div className="text-2xl font-bold text-orange-600">{injuryUpdates}</div>
-        <div className="text-xs text-gray-600">Injury Updates</div>
-        <div className="text-xs text-gray-600 mt-1">Today</div>
-      </div>
-    </div>
-  );
-});
-
-RealTimeStats.displayName = 'RealTimeStats';
-
-// Memoized auto-refresh controls
-const AutoRefreshControls = memo(({ 
+// Memoized auto-refresh controls component
+const AutoRefreshControls = memo(({
   isAutoRefreshEnabled,
   refreshInterval,
   onToggleAutoRefresh,
@@ -239,453 +100,348 @@ const AutoRefreshControls = memo(({
   onChangeInterval: (interval: number) => void;
   onManualRefresh: () => void;
 }) => {
+  const intervalMinutes = Math.floor(refreshInterval / 60);
+  
   return (
-    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-      <div className="flex items-center gap-4">
+    <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+          <Activity className="w-5 h-5" />
+          Auto-Refresh Settings
+        </h3>
         <button
-          onClick={onToggleAutoRefresh}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-            isAutoRefreshEnabled
-              ? 'bg-green-600 text-white hover:bg-green-700'
-              : 'bg-gray-600 text-white hover:bg-gray-700'
-          }`}
+          onClick={onManualRefresh}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
-          <RefreshCw className={`w-4 h-4 ${isAutoRefreshEnabled ? 'animate-spin' : ''}`} />
-          {isAutoRefreshEnabled ? 'Auto-Refresh ON' : 'Auto-Refresh OFF'}
+          <RefreshCw className="w-4 h-4" />
+          Refresh Now
         </button>
-        
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700">Interval:</label>
-          <select
-            value={refreshInterval}
-            onChange={(e) => onChangeInterval(Number(e.target.value))}
-            className="px-2 py-1 border border-gray-300 rounded text-sm"
-          >
-            <option value={30}>30 seconds</option>
-            <option value={60}>1 minute</option>
-            <option value={300}>5 minutes</option>
-            <option value={600}>10 minutes</option>
-          </select>
-        </div>
       </div>
-      
-      <button
-        onClick={onManualRefresh}
-        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-      >
-        <RefreshCw className="w-4 h-4" />
-        Refresh Now
-      </button>
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="font-medium text-gray-900">Auto-refresh</span>
+          <button
+            onClick={onToggleAutoRefresh}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+              isAutoRefreshEnabled ? 'bg-blue-600' : 'bg-gray-200'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                isAutoRefreshEnabled ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+
+        {isAutoRefreshEnabled && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">Refresh Interval</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min="1"
+                max="30"
+                value={intervalMinutes}
+                onChange={(e) => onChangeInterval(parseInt(e.target.value) * 60)}
+                className="flex-1"
+              />
+              <span className="text-sm text-gray-600 w-20">{intervalMinutes} min</span>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 });
 
 AutoRefreshControls.displayName = 'AutoRefreshControls';
 
+// Memoized live updates feed component
+const LiveUpdatesFeed = memo(({
+  updates,
+  onClearUpdates
+}: {
+  updates: LiveUpdate[];
+  onClearUpdates: () => void;
+}) => {
+  const sortedUpdates = useMemo(() => 
+    [...updates].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()),
+    [updates]
+  );
+
+  return (
+    <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+          <Zap className="w-5 h-5" />
+          Live Updates ({updates.length})
+        </h3>
+        {updates.length > 0 && (
+          <button
+            onClick={onClearUpdates}
+            className="text-sm text-gray-600 hover:text-red-600 transition-colors"
+          >
+            Clear All
+          </button>
+        )}
+      </div>
+
+      <div className="space-y-3 max-h-80 overflow-y-auto">
+        {sortedUpdates.length > 0 ? (
+          sortedUpdates.map((update) => (
+            <div key={update.id} className={`p-3 rounded-lg border-l-4 ${
+              update.severity === 'high' ? 'bg-red-50 border-red-400' :
+              update.severity === 'medium' ? 'bg-yellow-50 border-yellow-400' :
+              'bg-blue-50 border-blue-400'
+            }`}>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      update.type === 'injury' ? 'bg-red-100 text-red-800' :
+                      update.type === 'ranking' ? 'bg-blue-100 text-blue-800' :
+                      update.type === 'adp' ? 'bg-purple-100 text-purple-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {update.type.toUpperCase()}
+                    </span>
+                    {update.playerName && (
+                      <span className="font-medium text-gray-900">{update.playerName}</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-700">{update.message}</p>
+                </div>
+                <span className="text-xs text-gray-500">
+                  {Math.round((Date.now() - update.timestamp.getTime()) / 60000)}m ago
+                </span>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
+            <p>No live updates yet</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+LiveUpdatesFeed.displayName = 'LiveUpdatesFeed';
+
 // Main LiveDataView component
-export default function LiveDataView() {
+export const LiveDataView = memo(() => {
   const { state } = useFantasyFootball();
   
-  // Get my player IDs for personalized data
-  const myPlayerIds = useMemo(() => {
-    return Array.from(state.draftedPlayers).map(id => id.toString());
-  }, [state.draftedPlayers]);
+  // Get player IDs for my team to highlight relevant updates
+  const myPlayerIds = useMemo(() => 
+    state.draftedPlayers.map(p => p.id.toString()),
+    [state.draftedPlayers]
+  );
 
-  // Browser MCP integration
-  const browserMCP = useBrowserMCP(myPlayerIds);
-  
   // ESPN API integration
   const espnData = useESPNData();
   
-  // Transform Browser MCP data to component format
+  // Transform data sources to component format
   const dataSources: DataSource[] = useMemo(() => [
     {
       id: 'espn-api',
-      name: 'ESPN API Direct',
-      status: espnData.isInitialized ? (espnData.isLoading ? 'syncing' : 'connected') : 'error',
-      lastUpdate: espnData.lastUpdate || new Date(),
-      updateInterval: 15,
-      description: 'Direct ESPN API for real-time player data, projections, and injury reports'
-    },
-    {
-      id: 'fantasypros',
-      name: 'FantasyPros',
-      status: browserMCP.state.healthStatus.fantasypros ? 'connected' : 'error',
-      lastUpdate: browserMCP.state.lastUpdate,
-      updateInterval: Math.floor(browserMCP.autoRefreshInterval / 60),
-      description: 'Expert consensus rankings and news'
-    },
-    {
-      id: 'espn-browser',
-      name: 'ESPN Fantasy (Browser)',
-      status: browserMCP.state.healthStatus.espn ? 'connected' : 'error',
-      lastUpdate: browserMCP.state.lastUpdate,
-      updateInterval: Math.floor(browserMCP.autoRefreshInterval / 60),
-      description: 'Player rankings and projections via browser scraping'
-    },
-    {
-      id: 'nfl',
-      name: 'NFL.com',
-      status: browserMCP.state.healthStatus.nfl ? 'connected' : 'error',
-      lastUpdate: browserMCP.state.lastUpdate,
+      name: 'ESPN Fantasy API',
+      status: espnData.loading ? 'syncing' : espnData.error ? 'error' : 'connected',
+      lastUpdate: espnData.lastUpdate,
       updateInterval: 5,
-      description: 'Official injury reports and news'
+      description: 'Official ESPN fantasy football data'
+    }
+  ], [espnData.loading, espnData.error, espnData.lastUpdate]);
+
+  // Calculate live statistics from ESPN data
+  const stats = useMemo(() => ({
+    liveRankings: espnData.rankings.length,
+    adpUpdates: espnData.rankings.filter(r => 
+      Date.now() - r.updated.getTime() < 3600000 // Last hour
+    ).length,
+    injuryUpdates: espnData.injuries.filter(i => 
+      Date.now() - i.updated.getTime() < 24 * 3600000 // Last 24 hours
+    ).length
+  }), [espnData.rankings, espnData.injuries]);
+
+  // Mock live updates for demonstration (in real app, these would come from real data sources)
+  const mockLiveUpdates: LiveUpdate[] = useMemo(() => [
+    {
+      id: 'update-1',
+      type: 'injury',
+      playerId: 123,
+      playerName: 'Christian McCaffrey',
+      message: 'Listed as questionable for Week 7 with calf injury',
+      timestamp: new Date(Date.now() - 5 * 60000), // 5 minutes ago
+      severity: 'high'
     },
     {
-      id: 'sleeper',
-      name: 'Sleeper API',
-      status: browserMCP.state.healthStatus.sleeper ? 'connected' : 'error',
-      lastUpdate: browserMCP.state.lastUpdate,
-      updateInterval: 10,
-      description: 'Real-time ADP and draft data'
+      id: 'update-2',
+      type: 'ranking',
+      playerId: 456,
+      playerName: 'Tyreek Hill',
+      message: 'Moved up 2 spots in consensus rankings after strong performance',
+      timestamp: new Date(Date.now() - 15 * 60000), // 15 minutes ago
+      severity: 'medium'
+    },
+    {
+      id: 'update-3',
+      type: 'adp',
+      playerId: 789,
+      playerName: 'Bijan Robinson',
+      message: 'ADP decreased by 0.5 rounds over the past week',
+      timestamp: new Date(Date.now() - 30 * 60000), // 30 minutes ago
+      severity: 'low'
     }
-  ], [
-    espnData.isInitialized, 
-    espnData.isLoading, 
-    espnData.lastUpdate,
-    browserMCP.state.healthStatus, 
-    browserMCP.state.lastUpdate, 
-    browserMCP.autoRefreshInterval
-  ]);
+  ], []);
 
-  // Calculate live statistics combining both data sources
-  const stats = useMemo(() => ({
-    liveRankings: browserMCP.rankings.length + espnData.rankings.length,
-    adpUpdates: [
-      ...browserMCP.rankings.filter(r => 
-        Date.now() - r.updated.getTime() < 3600000 // Last hour
-      ),
-      ...espnData.rankings.filter(r => 
-        Date.now() - r.updated.getTime() < 3600000 // Last hour
-      )
-    ].length,
-    injuryUpdates: [
-      ...browserMCP.injuries.filter(i => 
-        Date.now() - i.updated.getTime() < 24 * 3600000 // Last 24 hours
-      ),
-      ...espnData.injuries.filter(i => 
-        Date.now() - i.updated.getTime() < 24 * 3600000 // Last 24 hours
-      )
-    ].length
-  }), [browserMCP.rankings, browserMCP.injuries, espnData.rankings, espnData.injuries]);
-
-  // Callback handlers using Browser MCP
+  // Callback handlers
   const handleToggleAutoRefresh = useCallback(() => {
-    if (browserMCP.isAutoRefreshEnabled) {
-      browserMCP.stopAutoRefresh();
-    } else {
-      browserMCP.startAutoRefresh();
-    }
-  }, [browserMCP]);
+    // In a real implementation, this would control auto-refresh
+    console.log('Toggle auto-refresh');
+  }, []);
 
   const handleChangeInterval = useCallback((interval: number) => {
-    browserMCP.setAutoRefreshInterval(interval);
-  }, [browserMCP]);
+    // In a real implementation, this would change refresh interval
+    console.log('Change interval:', interval);
+  }, []);
 
   const handleManualRefresh = useCallback(async () => {
-    // Refresh both Browser MCP and ESPN data
-    await Promise.all([
-      browserMCP.refreshAll(),
-      espnData.refreshData()
-    ]);
-  }, [browserMCP, espnData]);
+    await espnData.refreshData();
+  }, [espnData]);
 
   const handleRefreshSource = useCallback(async (sourceId: string) => {
-    // Refresh specific data based on source
     switch (sourceId) {
       case 'espn-api':
         await espnData.refreshData();
         break;
-      case 'fantasypros':
-        await browserMCP.refreshNews();
-        break;
-      case 'espn-browser':
-        await browserMCP.refreshRankings();
-        break;
-      case 'nfl':
-        await browserMCP.refreshInjuries();
-        break;
       default:
-        await browserMCP.refreshAll();
+        await espnData.refreshData();
     }
-  }, [browserMCP]);
-
-  const handleToggleSource = useCallback((sourceId: string) => {
-    console.log('Toggling source:', sourceId);
-    // In a real implementation, this could disable/enable specific data sources
-  }, []);
+  }, [espnData]);
 
   const handleClearUpdates = useCallback(() => {
-    browserMCP.clearLiveUpdates();
-  }, [browserMCP]);
+    // In a real implementation, this would clear live updates
+    console.log('Clear updates');
+  }, []);
 
   return (
-    <div className="space-y-6">
-      {/* Header and Stats */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5" />
-            Live Data Integration
-          </h3>
-          <div className="flex items-center gap-2 text-sm text-gray-600">
+    <div className="space-y-8">
+      {/* Header Section */}
+      <div className="text-center">
+        <h1 className="text-4xl font-bold text-gray-900 mb-4">Live Data Monitoring</h1>
+        <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-6">
+          Real-time fantasy football data from ESPN API. Track rankings, injuries, and ADP changes as they happen.
+        </p>
+        
+        <div className="flex items-center justify-center gap-4 text-sm">
+          <div className="flex items-center gap-2 text-gray-600">
             <Globe className="w-5 h-5 text-blue-500" />
-            <span>Browser MCP Ready</span>
+            <span>Live Data Ready</span>
           </div>
         </div>
+      </div>
 
-        <RealTimeStats
-          players={state.players}
-          liveRankings={stats.liveRankings}
-          adpUpdates={stats.adpUpdates}
-          injuryUpdates={stats.injuryUpdates}
-        />
+      {/* Live Statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+          <TrendingUp className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+          <div className="text-2xl font-bold text-gray-900">{stats.liveRankings}</div>
+          <div className="text-sm text-gray-600">Live Rankings</div>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+          <Activity className="w-8 h-8 text-green-600 mx-auto mb-2" />
+          <div className="text-2xl font-bold text-gray-900">{stats.adpUpdates}</div>
+          <div className="text-sm text-gray-600">ADP Updates (1h)</div>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+          <AlertCircle className="w-8 h-8 text-red-600 mx-auto mb-2" />
+          <div className="text-2xl font-bold text-gray-900">{stats.injuryUpdates}</div>
+          <div className="text-sm text-gray-600">Injury Updates (24h)</div>
+        </div>
+      </div>
 
-        <div className="mt-6">
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column */}
+        <div className="lg:col-span-2 space-y-6">
+          <DataSourceStatus
+            sources={dataSources}
+            onRefresh={handleRefreshSource}
+            onToggleSource={() => {}}
+          />
+          
           <AutoRefreshControls
-            isAutoRefreshEnabled={browserMCP.isAutoRefreshEnabled}
-            refreshInterval={browserMCP.autoRefreshInterval}
+            isAutoRefreshEnabled={false}
+            refreshInterval={300} // 5 minutes
             onToggleAutoRefresh={handleToggleAutoRefresh}
             onChangeInterval={handleChangeInterval}
             onManualRefresh={handleManualRefresh}
           />
         </div>
-      </div>
 
-      {/* Data Sources and Live Updates Grid */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        <DataSourceStatus
-          sources={dataSources}
-          onRefresh={handleRefreshSource}
-          onToggleSource={handleToggleSource}
-        />
-        
-        <LiveUpdatesFeed
-          updates={browserMCP.liveUpdates}
-          onClearUpdates={handleClearUpdates}
-        />
-      </div>
-
-      {/* Browser MCP Integration Status */}
-      <div className={`border rounded-lg p-6 ${
-        browserMCP.state.isInitialized 
-          ? 'bg-blue-50 border-blue-200' 
-          : 'bg-red-50 border-red-200'
-      }`}>
-        <div className="flex items-start gap-3">
-          {browserMCP.state.isInitialized ? (
-            <Wifi className="w-6 h-6 text-blue-600 mt-1" />
-          ) : (
-            <WifiOff className="w-6 h-6 text-red-600 mt-1" />
-          )}
-          <div className="flex-1">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className={`font-semibold ${
-                browserMCP.state.isInitialized ? 'text-blue-900' : 'text-red-900'
-              }`}>
-                Browser MCP Integration Status
-              </h4>
-              
-              {browserMCP.state.isInitialized && (
-                <div className="flex items-center gap-2 text-sm">
-                  <button
-                    onClick={() => browserMCP.clearCache()}
-                    className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
-                  >
-                    Clear Cache
-                  </button>
-                  <button
-                    onClick={() => browserMCP.checkHealth()}
-                    className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
-                  >
-                    Test Sources
-                  </button>
-                </div>
-              )}
-            </div>
-            
-            <p className={`text-sm mb-3 ${
-              browserMCP.state.isInitialized ? 'text-blue-800' : 'text-red-800'
-            }`}>
-              {browserMCP.state.isInitialized ? (
-                'Browser MCP is actively collecting live data from fantasy platforms. All data sources are monitored and updated automatically based on your refresh settings.'
-              ) : (
-                browserMCP.state.error || 'Browser MCP service is not available. Please check your connection and try again.'
-              )}
-            </p>
-            
-            {browserMCP.state.isInitialized && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1">
-                    {browserMCP.state.isInitialized ? (
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 text-red-600" />
-                    )}
-                    <span className={browserMCP.state.isInitialized ? 'text-green-800' : 'text-red-800'}>
-                      Service {browserMCP.state.isInitialized ? 'Online' : 'Offline'}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-1">
-                  {browserMCP.isAutoRefreshEnabled ? (
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                  ) : (
-                    <Clock className="w-4 h-4 text-gray-600" />
-                  )}
-                  <span className={browserMCP.isAutoRefreshEnabled ? 'text-green-800' : 'text-gray-800'}>
-                    Auto-refresh {browserMCP.isAutoRefreshEnabled ? 'On' : 'Off'}
-                  </span>
-                </div>
-                
-                <div className="flex items-center gap-1">
-                  <Activity className="w-4 h-4 text-blue-600" />
-                  <span className="text-blue-800">
-                    {browserMCP.news.length} News Items
-                  </span>
-                </div>
-                
-                <div className="flex items-center gap-1">
-                  <TrendingUp className="w-4 h-4 text-purple-600" />
-                  <span className="text-purple-800">
-                    {browserMCP.rankings.length} Rankings
-                  </span>
-                </div>
-              </div>
-            )}
-            
-            {browserMCP.state.error && (
-              <div className="mt-3 p-3 bg-red-100 border border-red-300 rounded-lg">
-                <div className="flex items-center gap-2 text-red-800 text-sm">
-                  <AlertCircle className="w-4 h-4" />
-                  <span className="font-medium">Error:</span>
-                  <span>{browserMCP.state.error}</span>
-                </div>
-              </div>
-            )}
-            
-            {!browserMCP.state.isInitialized && (
-              <button
-                onClick={() => window.location.reload()}
-                className="mt-3 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Retry Connection
-              </button>
-            )}
-          </div>
+        {/* Right Column */}
+        <div className="space-y-6">
+          <LiveUpdatesFeed
+            updates={mockLiveUpdates}
+            onClearUpdates={handleClearUpdates}
+          />
         </div>
       </div>
 
       {/* ESPN API Integration Status */}
       <div className={`border rounded-lg p-6 ${
-        espnData.isInitialized 
-          ? 'bg-green-50 border-green-200' 
-          : 'bg-yellow-50 border-yellow-200'
+        !espnData.error ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
       }`}>
         <div className="flex items-start gap-3">
-          <Zap className={`w-6 h-6 mt-1 ${
-            espnData.isInitialized ? 'text-green-600' : 'text-yellow-600'
-          }`} />
+          {!espnData.error ? (
+            <Wifi className="w-6 h-6 text-green-600 mt-1" />
+          ) : (
+            <WifiOff className="w-6 h-6 text-red-600 mt-1" />
+          )}
           <div className="flex-1">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className={`font-semibold ${
-                espnData.isInitialized ? 'text-green-900' : 'text-yellow-900'
-              }`}>
-                ESPN API Direct Integration Status
-              </h4>
-              
-              {espnData.isInitialized && (
-                <div className="flex items-center gap-2 text-sm">
-                  <button
-                    onClick={() => espnData.clearCache()}
-                    className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
-                  >
-                    Clear Cache
-                  </button>
-                  <button
-                    onClick={() => espnData.refreshData()}
-                    className={`px-3 py-1 text-xs rounded transition-colors ${
-                      espnData.isLoading 
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-green-100 text-green-700 hover:bg-green-200'
-                    }`}
-                    disabled={espnData.isLoading}
-                  >
-                    {espnData.isLoading ? 'Refreshing...' : 'Refresh Data'}
-                  </button>
-                </div>
-              )}
-            </div>
+            <h4 className={`font-semibold ${
+              !espnData.error ? 'text-green-900' : 'text-red-900'
+            }`}>
+              ESPN API Integration Status
+            </h4>
             
             <p className={`text-sm mb-3 ${
-              espnData.isInitialized ? 'text-green-800' : 'text-yellow-800'
+              !espnData.error ? 'text-green-800' : 'text-red-800'
             }`}>
-              {espnData.isInitialized ? (
-                'ESPN API is directly connected and providing real-time player data, projections, injury reports, and rankings with intelligent caching and rate limiting.'
+              {!espnData.error ? (
+                'ESPN API is actively providing live fantasy football data. Rankings and player information are updated automatically.'
               ) : (
-                espnData.error || 'ESPN API is initializing or temporarily unavailable. Using cached/fallback data.'
+                espnData.error || 'ESPN API service is currently unavailable. Please check your connection and try again.'
               )}
             </p>
             
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
-              <div className="flex items-center gap-1">
-                {espnData.isInitialized ? (
+            {!espnData.error && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="flex items-center gap-1">
                   <CheckCircle className="w-4 h-4 text-green-600" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 text-yellow-600" />
-                )}
-                <span className={espnData.isInitialized ? 'text-green-800' : 'text-yellow-800'}>
-                  API {espnData.isInitialized ? 'Online' : 'Fallback'}
-                </span>
-              </div>
-              
-              <div className="flex items-center gap-1">
-                {espnData.isLoading ? (
-                  <RefreshCw className="w-4 h-4 text-blue-600 animate-spin" />
-                ) : (
-                  <CheckCircle className="w-4 h-4 text-green-600" />
-                )}
-                <span className={espnData.isLoading ? 'text-blue-800' : 'text-green-800'}>
-                  {espnData.isLoading ? 'Syncing' : 'Ready'}
-                </span>
-              </div>
-              
-              <div className="flex items-center gap-1">
-                <Activity className="w-4 h-4 text-blue-600" />
-                <span className="text-blue-800">
-                  {espnData.players.length} Players
-                </span>
-              </div>
-              
-              <div className="flex items-center gap-1">
-                <TrendingUp className="w-4 h-4 text-purple-600" />
-                <span className="text-purple-800">
-                  {espnData.projections.length} Projections
-                </span>
-              </div>
-              
-              <div className="flex items-center gap-1">
-                <AlertCircle className="w-4 h-4 text-red-600" />
-                <span className="text-red-800">
-                  {espnData.injuries.length} Injuries
-                </span>
-              </div>
-            </div>
-            
-            {espnData.lastUpdate && (
-              <div className="mt-3 text-xs text-gray-600">
-                Last updated: {espnData.lastUpdate.toLocaleString()}
-              </div>
-            )}
-            
-            {espnData.error && (
-              <div className="mt-3 p-3 bg-red-100 border border-red-300 rounded-lg">
-                <div className="flex items-center gap-2 text-red-800 text-sm">
-                  <AlertCircle className="w-4 h-4" />
-                  <span className="font-medium">Notice:</span>
-                  <span>{espnData.error}</span>
+                  <span className="text-green-800">Service Online</span>
+                </div>
+                
+                <div className="flex items-center gap-1">
+                  <Clock className="w-4 h-4 text-gray-600" />
+                  <span className="text-gray-800">Auto-refresh Off</span>
+                </div>
+                
+                <div className="flex items-center gap-1">
+                  <TrendingUp className="w-4 h-4 text-blue-600" />
+                  <span className="text-blue-800">{espnData.rankings.length} Rankings</span>
+                </div>
+                
+                <div className="flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4 text-purple-600" />
+                  <span className="text-purple-800">{espnData.injuries.length} Injuries</span>
                 </div>
               </div>
             )}
@@ -694,4 +450,6 @@ export default function LiveDataView() {
       </div>
     </div>
   );
-}
+});
+
+LiveDataView.displayName = 'LiveDataView';

@@ -1,7 +1,7 @@
 import React, { memo, useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { Brain, Send, RotateCcw, Download, Bot, User, Copy, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useFantasyFootball } from '@/contexts/FantasyFootballContext';
-import { useDraftSimulation } from '@/hooks';
+import { useDraftData } from '@/hooks';
 import { Player, Position, ScoringSystem } from '@/types';
 
 // PERFORMANCE FIX: Simplified chat message interface - REMOVED analysis property
@@ -173,7 +173,7 @@ export default function AIView() {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  const { currentRound } = useDraftSimulation();
+  const { currentRound } = useDraftData();
 
   // PERFORMANCE FIX: Simplified initialization - NO setInterval, NO proactiveAlerts
   useEffect(() => {

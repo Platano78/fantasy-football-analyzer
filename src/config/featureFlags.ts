@@ -34,14 +34,6 @@ export const FEATURE_FLAGS: Record<string, FeatureFlag> = {
     environments: ['development', 'staging', 'production']
   },
 
-  BROWSER_MCP: {
-    key: 'browser_mcp',
-    enabled: config.FEATURES.BROWSER_MCP,
-    rolloutPercentage: 100,
-    description: 'Browser MCP webscraping for backup data sources',
-    environments: ['development', 'staging', 'production'],
-    dependencies: ['ESPN_API']
-  },
 
   // AI Services
   LOCAL_GEMINI: {
@@ -66,7 +58,7 @@ export const FEATURE_FLAGS: Record<string, FeatureFlag> = {
     rolloutPercentage: 100,
     description: 'Comprehensive AI fantasy football coaching',
     environments: ['development', 'staging', 'production'],
-    dependencies: ['CLOUD_GEMINI']
+    dependencies: ['LOCAL_GEMINI', 'CLOUD_GEMINI']
   },
 
   // Performance & Monitoring

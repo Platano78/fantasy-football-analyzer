@@ -19,50 +19,104 @@ export default defineConfig(({ mode }) => {
       __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
     },
     build: {
-      // Performance optimizations
+      // Enhanced performance optimizations
       rollupOptions: {
         output: {
           manualChunks: (id) => {
-            // Vendor dependencies
+            // Critical path optimization - separate by loading priority
+            
+            // Vendor dependencies with size-based chunking
             if (id.includes('node_modules')) {
               if (id.includes('react') || id.includes('react-dom')) {
-                return 'vendor-react';
+                return 'vendor-react'; // ~45KB - Critical
               }
               if (id.includes('recharts')) {
-                return 'vendor-charts';
+                return 'vendor-charts'; // ~85KB - Heavy, load on demand
               }
               if (id.includes('lucide-react')) {
-                return 'vendor-icons';
+                return 'vendor-icons'; // ~15KB - Frequent use
               }
-              if (id.includes('@playwright')) {
-                return 'vendor-testing';
+              if (id.includes('@google/generative-ai')) {
+                return 'vendor-ai'; // ~25KB - AI features only
               }
-              return 'vendor-libs';
+              if (id.includes('@playwright') || id.includes('vitest')) {
+                return 'vendor-testing'; // Testing libs - should be tree-shaken in prod
+              }
+              // Group smaller utilities together
+              if (id.includes('date-fns') || id.includes('lodash') || id.includes('ramda')) {
+                return 'vendor-utils';
+              }
+              return 'vendor-misc';
             }
             
-            // App code splitting
+            // Smart view chunking based on usage patterns
             if (id.includes('/views/')) {
+              // Heavy analytics views - lazy load
               if (id.includes('AdvancedAnalyticsView') || id.includes('SimulationView')) {
-                return 'views-heavy';
+                return 'views-analytics'; // ~65KB
               }
+              // AI-powered views - separate chunk for AI features
               if (id.includes('AIView') || id.includes('NewsView')) {
-                return 'views-ai';
+                return 'views-ai'; // ~45KB
               }
-              return 'views-core';
+              // Core draft views - priority load
+              if (id.includes('DraftView') || id.includes('ComparisonView') || id.includes('RankingsView')) {
+                return 'views-core'; // ~55KB - High priority
+              }
+              // Secondary views
+              if (id.includes('LiveDataView') || id.includes('TrackerView')) {
+                return 'views-live'; // ~35KB
+              }
+              return 'views-misc';
             }
             
+            // Component chunking by usage frequency and size
             if (id.includes('/components/')) {
-              if (id.includes('Modal') || id.includes('Detail')) {
-                return 'components-modals';
+              // Heavy modals and detailed views
+              if (id.includes('Modal') || id.includes('Detail') || id.includes('Comparison')) {
+                return 'components-modals'; // ~40KB - Load on interaction
               }
-              if (id.includes('Chart') || id.includes('Analytics')) {
-                return 'components-charts';
+              // Chart and visualization components
+              if (id.includes('Chart') || id.includes('Analytics') || id.includes('Performance')) {
+                return 'components-viz'; // ~30KB - Analytics features
               }
-              return 'components-core';
+              // AI-related components
+              if (id.includes('AI') || id.includes('Chat') || id.includes('Coach')) {
+                return 'components-ai'; // ~35KB - AI features
+              }
+              // Core UI components - bundle with main app
+              if (id.includes('Button') || id.includes('Input') || id.includes('Navigation') ||
+                  id.includes('Layout') || id.includes('Header') || id.includes('Filter')) {
+                return undefined; // Include in main bundle for immediate availability
+              }
+              return 'components-secondary';
             }
             
-            if (id.includes('/services/') || id.includes('/utils/')) {
-              return 'app-utils';
+            // Service layer chunking
+            if (id.includes('/services/')) {
+              if (id.includes('AI') || id.includes('Gemini') || id.includes('OpenAI')) {
+                return 'services-ai';
+              }
+              if (id.includes('ESPN') || id.includes('API') || id.includes('Data')) {
+                return 'services-api';
+              }
+              return 'services-core';
+            }
+            
+            // Utilities and helpers
+            if (id.includes('/utils/') || id.includes('/hooks/')) {
+              if (id.includes('performance') || id.includes('monitoring') || id.includes('cache')) {
+                return 'utils-performance';
+              }
+              if (id.includes('virtual') || id.includes('optimization') || id.includes('memory')) {
+                return 'utils-optimization';
+              }
+              return 'utils-core';
+            }
+            
+            // Context and state management
+            if (id.includes('/contexts/') || id.includes('/store/')) {
+              return undefined; // Keep with main bundle for immediate state availability
             }
           },
           // Optimize asset filenames with better cache headers

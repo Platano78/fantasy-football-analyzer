@@ -4,7 +4,6 @@ import {
   DraftView, 
   ComparisonView, 
   RankingsView,
-  SimulationView, 
   LiveDataView, 
   TrackerView, 
   AIView,
@@ -29,7 +28,6 @@ import { config, validateConfiguration, getConfigSummary } from '@/config/enviro
 import { isFeatureFlagEnabled } from '@/config/featureFlags';
 import { performanceMonitor as rumPerformanceMonitor } from '@/services/PerformanceMonitor';
 import { hybridAIService } from '@/services/HybridAIService';
-import { browserMCPService } from '@/services/BrowserMCPService';
 
 const App = memo(() => {
   const [currentView, setCurrentView] = useState<ViewType>('draft');
@@ -64,11 +62,6 @@ const App = memo(() => {
           // RUM monitor initializes automatically
         }
 
-        // Initialize Browser MCP Service if enabled
-        if (isFeatureFlagEnabled('BROWSER_MCP')) {
-          console.log('🌐 Initializing Browser MCP Service');
-          await browserMCPService.initialize();
-        }
 
         // Initialize Hybrid AI Service if enabled
         if (isFeatureFlagEnabled('AI_COACHING')) {
@@ -125,13 +118,12 @@ const App = memo(() => {
           const preloadStart = performance.now();
           
           await Promise.all([
-            preloadViews.simulation(),
             preloadViews.analytics()
           ]);
           
           const preloadTime = performance.now() - preloadStart;
           rumPerformanceMonitor.trackCustomMetric('view_preload_time', preloadTime, 'ms', {
-            views: 'simulation,analytics'
+            views: 'analytics'
           });
         });
       });
@@ -156,7 +148,6 @@ const App = memo(() => {
     { id: 'draft' as ViewType, name: 'Draft Board', icon: Users },
     { id: 'compare' as ViewType, name: 'Player Comparison', icon: BarChart3 },
     { id: 'rankings' as ViewType, name: 'Custom Rankings', icon: Target },
-    { id: 'simulation' as ViewType, name: 'Draft Simulation', icon: Play },
     { id: 'live-data' as ViewType, name: 'Live Data', icon: Globe },
     { id: 'draft-tracker' as ViewType, name: 'Draft Tracker', icon: Eye },
     { id: 'enhanced-ai' as ViewType, name: 'Enhanced AI', icon: Brain },
@@ -171,11 +162,6 @@ const App = memo(() => {
     'draft': useCallback(() => <DraftView />, []),
     'compare': useCallback(() => <ComparisonView />, []),
     'rankings': useCallback(() => <RankingsView />, []),
-    'simulation': useCallback(() => (
-      <LazyWrapper name="Simulation View">
-        <SimulationView />
-      </LazyWrapper>
-    ), []),
     'live-data': useCallback(() => (
       <LazyWrapper name="Live Data View">
         <LiveDataView />

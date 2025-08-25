@@ -13,7 +13,7 @@
  * - Integration with existing Player/Team interfaces
  */
 
-import { Player, Team, Position, InjuryStatus } from '../types/index';
+import { Player, Team, Position, InjuryStatus, League, LeagueTeam, AIEnhancedPlayer, LeagueDataStream } from '../types/index';
 import { browserMCPService } from './BrowserMCPService';
 
 // ESPN API Response Interfaces
@@ -113,6 +113,91 @@ export interface ESPNRanking {
   updated: Date;
 }
 
+export interface ESPNNewsItem {
+  id: string;
+  headline: string;
+  summary: string;
+  content?: string;
+  publishedAt: Date;
+  source: string;
+  category: 'injury' | 'trade' | 'depth_chart' | 'performance' | 'breaking' | 'analysis';
+  affectedPlayers: Array<{
+    playerId: string;
+    playerName: string;
+    position: string;
+    team: string;
+    impactType: 'positive' | 'negative' | 'neutral';
+  }>;
+  impactScore: 1 | 2 | 3 | 4 | 5;
+  severity: 'low' | 'medium' | 'high' | 'urgent';
+  tags: string[];
+  sourceUrl?: string;
+  imageUrl?: string;
+  readTime: number;
+}
+
+// League-Aware Data Interfaces
+export interface ESPNLeagueData {
+  leagueId: string;
+  leagueName: string;
+  season: number;
+  currentWeek: number;
+  teams: Array<{
+    id: string;
+    name: string;
+    owner: string;
+    roster: ESPNPlayer[];
+    record: { wins: number; losses: number; ties: number };
+    points: { total: number; average: number };
+  }>;
+  settings: {
+    scoringType: 'standard' | 'ppr' | 'halfPpr';
+    rosterPositions: Record<Position, number>;
+    size: number;
+  };
+}
+
+export interface ESPNLeaguePlayerData {
+  player: ESPNPlayer;
+  leagueContext: {
+    leagueId: string;
+    isAvailable: boolean;
+    ownedByTeam?: string;
+    waivesPriority?: number;
+    recentActivity: {
+      added?: Date;
+      dropped?: Date;
+      traded?: Date;
+    };
+  };
+  projections: ESPNFantasyProjection;
+  trends: {
+    weeklyTarget: boolean; // High-value pickup for this week
+    longTermValue: number; // 0-100 season-long value
+    injuryRisk: number; // 0-100 injury probability
+  };
+}
+
+export interface LeagueNewsDigest {
+  leagueId: string;
+  lastUpdate: Date;
+  relevantNews: ESPNNewsItem[];
+  playerAlerts: Array<{
+    playerId: string;
+    playerName: string;
+    alertType: 'injury' | 'opportunity' | 'trade_value' | 'waiver_target';
+    urgency: 'low' | 'medium' | 'high';
+    message: string;
+    actionRecommended?: string;
+  }>;
+  leagueSpecificInsights: Array<{
+    category: 'roster_moves' | 'trade_targets' | 'matchup_advantages';
+    insight: string;
+    confidence: number;
+    relevantPlayers: string[];
+  }>;
+}
+
 // Cache Entry Interface
 interface CacheEntry<T> {
   data: T;
@@ -129,6 +214,22 @@ interface RateLimitEntry {
 // Configuration
 const ESPN_CONFIG = {
   BASE_URL: '/api/espn', // Use Netlify proxy instead of direct ESPN calls
+  
+  // Known League Configurations
+  LEAGUES: {
+    LEGENDS: {
+      id: '1602776',
+      name: 'Legends League',
+      season: 2024,
+      owner: 'Primary User'
+    },
+    INJUSTICE: {
+      id: '6317063', 
+      name: 'Injustice League',
+      season: 2024,
+      owner: 'Primary User'
+    }
+  } as const,
   RATE_LIMITS: {
     REQUEST_WINDOW: 60 * 1000, // 1 minute
     MAX_REQUESTS_PER_WINDOW: 100,
@@ -141,7 +242,14 @@ const ESPN_CONFIG = {
     PROJECTIONS: 15 * 60 * 1000, // 15 minutes
     INJURIES: 5 * 60 * 1000, // 5 minutes
     RANKINGS: 15 * 60 * 1000, // 15 minutes
+    NEWS: 3 * 60 * 1000, // 3 minutes for fast-moving news
     HISTORICAL: 24 * 60 * 60 * 1000, // 24 hours
+    
+    // League-specific cache TTLs
+    LEAGUE_DATA: 5 * 60 * 1000, // 5 minutes for league rosters/standings
+    LEAGUE_PLAYERS: 10 * 60 * 1000, // 10 minutes for league player context
+    LEAGUE_NEWS: 2 * 60 * 1000, // 2 minutes for league-relevant news
+    LEAGUE_INSIGHTS: 15 * 60 * 1000, // 15 minutes for AI insights
   },
   TIMEOUTS: {
     DEFAULT: 10000, // 10 seconds
@@ -162,6 +270,11 @@ class ESPNAPIService {
   private isInitialized = false;
   private retryQueue: Array<{ fn: Function; resolve: Function; reject: Function }> = [];
   private processingQueue = false;
+  
+  // League-aware state management
+  private leagueDataStreams: Map<string, LeagueDataStream> = new Map();
+  private leagueSpecificCache: Map<string, Map<string, CacheEntry<any>>> = new Map();
+  private crossLeagueAnalytics: Map<string, any> = new Map();
 
   public static getInstance(): ESPNAPIService {
     if (!ESPNAPIService.instance) {
@@ -433,6 +546,57 @@ class ESPNAPIService {
       console.error('Error fetching injury reports from news:', error);
       // Extract injury data from Sleeper API
       return this.getInjuriesFromSleeperData();
+    }
+  }
+
+  /**
+   * Get latest NFL news for AI analysis
+   */
+  async getLatestNews(limit?: number): Promise<ESPNNewsItem[]> {
+    try {
+      console.log('🗞️ Fetching latest NFL news from ESPN...');
+      
+      const data = await this.makeRequest<any>(
+        `/news${limit ? `?limit=${limit}` : ''}`,
+        'espn_latest_news',
+        ESPN_CONFIG.CACHE_TTL.NEWS
+      );
+
+      const newsItems = this.transformESPNNewsToAppFormat(data.articles || data.items || []);
+      
+      console.log(`✅ Successfully fetched ${newsItems.length} news items`);
+      return newsItems;
+    } catch (error) {
+      console.error('Error fetching latest news:', error);
+      
+      // Fall back to generating mock news from injury data for AI analysis
+      try {
+        const injuries = await this.getInjuryReports();
+        return this.generateNewsFromInjuries(injuries);
+      } catch (fallbackError) {
+        console.error('Fallback news generation failed:', fallbackError);
+        return this.generateFallbackNews();
+      }
+    }
+  }
+
+  /**
+   * Get player-specific news for AI analysis
+   */
+  async getPlayerNews(playerId: string): Promise<ESPNNewsItem[]> {
+    try {
+      console.log(`🔍 Fetching news for player ${playerId}...`);
+      
+      const data = await this.makeRequest<any>(
+        `/news?player=${playerId}`,
+        `espn_player_news_${playerId}`,
+        ESPN_CONFIG.CACHE_TTL.NEWS
+      );
+
+      return this.transformESPNNewsToAppFormat(data.articles || data.items || []);
+    } catch (error) {
+      console.error(`Error fetching news for player ${playerId}:`, error);
+      return [];
     }
   }
 
@@ -855,6 +1019,287 @@ class ESPNAPIService {
   }
 
   /**
+   * Transform ESPN news data to app format
+   */
+  private transformESPNNewsToAppFormat(espnNews: any[]): ESPNNewsItem[] {
+    return espnNews.map((article, index) => {
+      const playersInHeadline = this.extractPlayersFromHeadline(article.headline || article.title || '');
+      
+      return {
+        id: `espn_news_${article.id || index}`,
+        headline: article.headline || article.title || 'NFL News Update',
+        summary: article.summary || article.description || this.truncateText(article.story || '', 200),
+        content: article.story || article.content,
+        publishedAt: new Date(article.published || article.date || Date.now()),
+        source: 'ESPN',
+        category: this.categorizeNewsItem(article.headline || article.title || ''),
+        affectedPlayers: playersInHeadline,
+        impactScore: this.calculateNewsImpactScore(article.headline || '', playersInHeadline.length),
+        severity: this.assessNewsSeverity(article.headline || article.title || ''),
+        tags: this.extractTagsFromNews(article),
+        sourceUrl: article.links?.[0]?.href || article.url,
+        imageUrl: article.images?.[0]?.url,
+        readTime: this.calculateReadTime(article.story || article.content || article.summary || '')
+      };
+    });
+  }
+
+  /**
+   * Extract players mentioned in headlines
+   */
+  private extractPlayersFromHeadline(headline: string): Array<{
+    playerId: string;
+    playerName: string;
+    position: string;
+    team: string;
+    impactType: 'positive' | 'negative' | 'neutral';
+  }> {
+    // Simple extraction - in production, this would use a more sophisticated NLP approach
+    const words = headline.split(' ');
+    const players = [];
+    
+    // Look for player name patterns (First Last)
+    for (let i = 0; i < words.length - 1; i++) {
+      const firstName = words[i];
+      const lastName = words[i + 1];
+      
+      // Basic name detection (capitalized words not in common NFL terms)
+      if (this.isLikelyPlayerName(firstName, lastName)) {
+        const impactType = this.determineImpactType(headline);
+        
+        players.push({
+          playerId: `extracted_${firstName.toLowerCase()}_${lastName.toLowerCase()}`,
+          playerName: `${firstName} ${lastName}`,
+          position: this.extractPositionFromHeadline(headline),
+          team: this.extractTeamFromHeadline(headline),
+          impactType
+        });
+      }
+    }
+    
+    return players;
+  }
+
+  private isLikelyPlayerName(firstName: string, lastName: string): boolean {
+    // Check if both words are capitalized and not common NFL terms
+    const nflTerms = ['NFL', 'THE', 'AND', 'OR', 'TO', 'FROM', 'WITH', 'WILL', 'CAN', 'HAVE', 'HAS', 'IS', 'ARE', 'WAS', 'WERE'];
+    const isCapitalized = (word: string) => word[0] === word[0].toUpperCase();
+    
+    return (
+      isCapitalized(firstName) && 
+      isCapitalized(lastName) &&
+      !nflTerms.includes(firstName.toUpperCase()) &&
+      !nflTerms.includes(lastName.toUpperCase()) &&
+      firstName.length > 1 &&
+      lastName.length > 1
+    );
+  }
+
+  private determineImpactType(headline: string): 'positive' | 'negative' | 'neutral' {
+    const lowerHeadline = headline.toLowerCase();
+    
+    // Negative indicators
+    if (lowerHeadline.includes('injury') || lowerHeadline.includes('out') || 
+        lowerHeadline.includes('suspended') || lowerHeadline.includes('benched') ||
+        lowerHeadline.includes('ruled out') || lowerHeadline.includes('hurt')) {
+      return 'negative';
+    }
+    
+    // Positive indicators
+    if (lowerHeadline.includes('return') || lowerHeadline.includes('cleared') ||
+        lowerHeadline.includes('activated') || lowerHeadline.includes('signs') ||
+        lowerHeadline.includes('extension') || lowerHeadline.includes('breakout')) {
+      return 'positive';
+    }
+    
+    return 'neutral';
+  }
+
+  private categorizeNewsItem(headline: string): 'injury' | 'trade' | 'depth_chart' | 'performance' | 'breaking' | 'analysis' {
+    const lowerHeadline = headline.toLowerCase();
+    
+    if (lowerHeadline.includes('injury') || lowerHeadline.includes('hurt') || lowerHeadline.includes('out')) {
+      return 'injury';
+    }
+    if (lowerHeadline.includes('trade') || lowerHeadline.includes('traded')) {
+      return 'trade';
+    }
+    if (lowerHeadline.includes('depth') || lowerHeadline.includes('starting') || lowerHeadline.includes('backup')) {
+      return 'depth_chart';
+    }
+    if (lowerHeadline.includes('performance') || lowerHeadline.includes('stats') || lowerHeadline.includes('yards')) {
+      return 'performance';
+    }
+    if (lowerHeadline.includes('breaking') || lowerHeadline.includes('report')) {
+      return 'breaking';
+    }
+    
+    return 'analysis';
+  }
+
+  private calculateNewsImpactScore(headline: string, playerCount: number): 1 | 2 | 3 | 4 | 5 {
+    let score = 1;
+    
+    const lowerHeadline = headline.toLowerCase();
+    
+    // High impact keywords
+    if (lowerHeadline.includes('injury') || lowerHeadline.includes('trade') || lowerHeadline.includes('suspended')) {
+      score += 2;
+    }
+    
+    // Medium impact keywords
+    if (lowerHeadline.includes('questionable') || lowerHeadline.includes('return')) {
+      score += 1;
+    }
+    
+    // Multiple players affected
+    if (playerCount > 1) {
+      score += 1;
+    }
+    
+    return Math.min(5, Math.max(1, score)) as 1 | 2 | 3 | 4 | 5;
+  }
+
+  private assessNewsSeverity(headline: string): 'low' | 'medium' | 'high' | 'urgent' {
+    const lowerHeadline = headline.toLowerCase();
+    
+    if (lowerHeadline.includes('breaking') || lowerHeadline.includes('urgent') || lowerHeadline.includes('ruled out')) {
+      return 'urgent';
+    }
+    if (lowerHeadline.includes('injury') || lowerHeadline.includes('trade')) {
+      return 'high';
+    }
+    if (lowerHeadline.includes('questionable') || lowerHeadline.includes('probable')) {
+      return 'medium';
+    }
+    
+    return 'low';
+  }
+
+  private extractTagsFromNews(article: any): string[] {
+    const tags = [];
+    const headline = (article.headline || article.title || '').toLowerCase();
+    
+    if (headline.includes('injury')) tags.push('injury');
+    if (headline.includes('trade')) tags.push('trade');
+    if (headline.includes('contract')) tags.push('contract');
+    if (headline.includes('draft')) tags.push('draft');
+    if (headline.includes('waiver')) tags.push('waivers');
+    
+    // Add sport-specific tags
+    if (article.categories) {
+      tags.push(...article.categories.map((cat: any) => cat.name || cat).slice(0, 3));
+    }
+    
+    return tags;
+  }
+
+  private calculateReadTime(text: string): number {
+    if (!text) return 1;
+    
+    // Average reading speed is ~200 words per minute
+    const words = text.split(' ').length;
+    return Math.max(1, Math.ceil(words / 200));
+  }
+
+  private truncateText(text: string, maxLength: number): string {
+    if (!text || text.length <= maxLength) return text;
+    
+    return text.substring(0, maxLength).replace(/\s+\S*$/, '') + '...';
+  }
+
+  /**
+   * Generate news from injury data for fallback
+   */
+  private generateNewsFromInjuries(injuries: ESPNInjuryReport[]): ESPNNewsItem[] {
+    return injuries.map((injury, index) => ({
+      id: `injury_news_${index}`,
+      headline: `${injury.playerName} Injury Update - ${injury.status}`,
+      summary: injury.description,
+      content: `${injury.playerName} (${injury.position}, ${injury.team}) has been listed as ${injury.status}. ${injury.description}`,
+      publishedAt: injury.updated,
+      source: 'ESPN Injury Report',
+      category: 'injury' as const,
+      affectedPlayers: [{
+        playerId: injury.playerId,
+        playerName: injury.playerName,
+        position: injury.position,
+        team: injury.team,
+        impactType: injury.severity === 'major' ? 'negative' : 'neutral'
+      }],
+      impactScore: injury.severity === 'major' ? 4 : injury.severity === 'moderate' ? 3 : 2,
+      severity: injury.severity === 'major' ? 'high' : injury.severity === 'moderate' ? 'medium' : 'low',
+      tags: ['injury', injury.severity],
+      readTime: 1
+    }));
+  }
+
+  /**
+   * Generate fallback news items for testing AI analysis
+   */
+  private generateFallbackNews(): ESPNNewsItem[] {
+    const mockNews = [
+      {
+        id: 'fallback_news_1',
+        headline: 'Christian McCaffrey Expected to Return from Injury This Week',
+        summary: 'The 49ers RB is reportedly healthy and ready to return to the lineup after missing two weeks.',
+        category: 'injury' as const,
+        playerName: 'Christian McCaffrey',
+        position: 'RB',
+        team: 'SF',
+        impactType: 'positive' as const,
+        impactScore: 4,
+        severity: 'medium' as const
+      },
+      {
+        id: 'fallback_news_2',
+        headline: 'CeeDee Lamb Signs Record Contract Extension with Cowboys',
+        summary: 'Dallas secures their star receiver with a massive 4-year extension worth $136 million.',
+        category: 'breaking' as const,
+        playerName: 'CeeDee Lamb',
+        position: 'WR',
+        team: 'DAL',
+        impactType: 'positive' as const,
+        impactScore: 3,
+        severity: 'medium' as const
+      },
+      {
+        id: 'fallback_news_3',
+        headline: 'Josh Allen Dealing with Minor Shoulder Issue',
+        summary: 'Bills QB is managing a shoulder problem but expected to play through it.',
+        category: 'injury' as const,
+        playerName: 'Josh Allen',
+        position: 'QB',
+        team: 'BUF',
+        impactType: 'negative' as const,
+        impactScore: 2,
+        severity: 'low' as const
+      }
+    ];
+
+    return mockNews.map((news, index) => ({
+      id: news.id,
+      headline: news.headline,
+      summary: news.summary,
+      content: `${news.summary} This development has significant fantasy football implications for managers.`,
+      publishedAt: new Date(Date.now() - index * 60 * 60 * 1000), // Stagger times
+      source: 'Fantasy Football Analyzer',
+      category: news.category,
+      affectedPlayers: [{
+        playerId: `fallback_${news.playerName.toLowerCase().replace(' ', '_')}`,
+        playerName: news.playerName,
+        position: news.position,
+        team: news.team,
+        impactType: news.impactType
+      }],
+      impactScore: news.impactScore as 1 | 2 | 3 | 4 | 5,
+      severity: news.severity,
+      tags: [news.category, 'fantasy', 'impact'],
+      readTime: 2
+    }));
+  }
+
+  /**
    * NEW HELPER METHODS FOR SLEEPER API INTEGRATION
    */
   private mapSleeperPositionToApp(sleeperPosition: string): Position | null {
@@ -1133,6 +1578,404 @@ class ESPNAPIService {
       cacheSize: this.cache.size,
       rateLimitStatus: Object.fromEntries(this.rateLimits),
     };
+  }
+
+  // ========================================
+  // LEAGUE-AWARE DATA STREAMING METHODS
+  // ========================================
+
+  /**
+   * Get league-specific data with enhanced context
+   */
+  async getLeagueData(leagueId: string): Promise<ESPNLeagueData> {
+    const cacheKey = `league_data_${leagueId}`;
+    
+    try {
+      const cachedData = this.getFromCache<ESPNLeagueData>(cacheKey);
+      if (cachedData) {
+        this.updateDataStreamStatus(leagueId, 'active');
+        return cachedData;
+      }
+
+      console.log(`🏈 Fetching league data for ${leagueId}...`);
+      
+      // For now, return mock data based on known leagues
+      // In production, this would call ESPN Fantasy API endpoints
+      const leagueData = this.generateLeagueData(leagueId);
+      
+      this.setCache(cacheKey, leagueData, ESPN_CONFIG.CACHE_TTL.LEAGUE_DATA);
+      this.updateDataStreamStatus(leagueId, 'active');
+      
+      return leagueData;
+      
+    } catch (error) {
+      console.error(`❌ Error fetching league data for ${leagueId}:`, error);
+      this.updateDataStreamStatus(leagueId, 'error');
+      throw error;
+    }
+  }
+
+  /**
+   * Get players with league-specific context and AI insights
+   */
+  async getLeaguePlayersWithContext(leagueId: string): Promise<ESPNLeaguePlayerData[]> {
+    const cacheKey = `league_players_${leagueId}`;
+    
+    try {
+      const cachedData = this.getFromCache<ESPNLeaguePlayerData[]>(cacheKey);
+      if (cachedData) {
+        return cachedData;
+      }
+
+      console.log(`🎯 Fetching league-aware player data for ${leagueId}...`);
+      
+      // Get base player data and enhance with league context
+      const [allPlayers, leagueData] = await Promise.all([
+        this.getAllPlayers(),
+        this.getLeagueData(leagueId)
+      ]);
+
+      const enhancedPlayers = await this.enhancePlayersWithLeagueContext(
+        allPlayers, 
+        leagueData
+      );
+      
+      this.setCache(cacheKey, enhancedPlayers, ESPN_CONFIG.CACHE_TTL.LEAGUE_PLAYERS);
+      return enhancedPlayers;
+      
+    } catch (error) {
+      console.error(`❌ Error fetching league players for ${leagueId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get league-relevant news digest with AI analysis
+   */
+  async getLeagueNewsDigest(leagueId: string): Promise<LeagueNewsDigest> {
+    const cacheKey = `league_news_${leagueId}`;
+    
+    try {
+      const cachedData = this.getFromCache<LeagueNewsDigest>(cacheKey);
+      if (cachedData) {
+        return cachedData;
+      }
+
+      console.log(`📰 Generating league news digest for ${leagueId}...`);
+      
+      const [allNews, leagueData] = await Promise.all([
+        this.getLatestNews(50), // Get more news for filtering
+        this.getLeagueData(leagueId)
+      ]);
+
+      const digest = await this.generateLeagueNewsDigest(allNews, leagueData);
+      
+      this.setCache(cacheKey, digest, ESPN_CONFIG.CACHE_TTL.LEAGUE_NEWS);
+      return digest;
+      
+    } catch (error) {
+      console.error(`❌ Error generating news digest for ${leagueId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Initialize data streams for multiple leagues
+   */
+  async initializeLeagueDataStreams(leagueIds: string[]): Promise<void> {
+    console.log(`🚀 Initializing data streams for ${leagueIds.length} leagues...`);
+    
+    for (const leagueId of leagueIds) {
+      const dataStream: LeagueDataStream = {
+        leagueId,
+        lastUpdate: new Date(),
+        dataFreshness: {
+          rosters: new Date(),
+          transactions: new Date(),
+          scores: new Date(),
+          news: new Date(),
+          projections: new Date(),
+        },
+        pendingUpdates: [],
+        connectionStatus: 'active',
+        errorCount: 0,
+      };
+      
+      this.leagueDataStreams.set(leagueId, dataStream);
+      
+      // Initialize league-specific cache
+      if (!this.leagueSpecificCache.has(leagueId)) {
+        this.leagueSpecificCache.set(leagueId, new Map());
+      }
+    }
+    
+    // Start periodic refresh for active leagues
+    this.startLeagueDataRefresh();
+  }
+
+  /**
+   * Get cross-league player analytics
+   */
+  async getCrossLeaguePlayerAnalytics(playerIds: string[]): Promise<Map<string, any>> {
+    const analytics = new Map();
+    const knownLeagues = Object.values(ESPN_CONFIG.LEAGUES);
+    
+    for (const playerId of playerIds) {
+      const playerAnalytics = {
+        playerId,
+        leagueAvailability: {},
+        valueVariance: 0,
+        arbitrageOpportunities: [],
+      };
+      
+      // Check availability across leagues
+      for (const league of knownLeagues) {
+        const leagueData = await this.getLeagueData(league.id);
+        const isOwned = this.isPlayerOwned(playerId, leagueData);
+        
+        playerAnalytics.leagueAvailability[league.id] = {
+          available: !isOwned,
+          league: league.name,
+          opportunity: !isOwned ? 'available' : 'owned',
+        };
+      }
+      
+      analytics.set(playerId, playerAnalytics);
+    }
+    
+    return analytics;
+  }
+
+  // ========================================
+  // HELPER METHODS FOR LEAGUE AWARENESS
+  // ========================================
+
+  private generateLeagueData(leagueId: string): ESPNLeagueData {
+    const leagueConfig = Object.values(ESPN_CONFIG.LEAGUES)
+      .find(l => l.id === leagueId);
+    
+    if (!leagueConfig) {
+      throw new Error(`Unknown league ID: ${leagueId}`);
+    }
+
+    // Mock league data - in production this would come from ESPN API
+    return {
+      leagueId,
+      leagueName: leagueConfig.name,
+      season: leagueConfig.season,
+      currentWeek: this.getCurrentNFLWeek(),
+      teams: this.generateMockTeams(leagueId),
+      settings: {
+        scoringType: 'ppr',
+        rosterPositions: {
+          QB: 1, RB: 2, WR: 3, TE: 1, K: 1, DEF: 1
+        },
+        size: leagueId === '1602776' ? 12 : 10, // Legends vs Injustice
+      }
+    };
+  }
+
+  private async enhancePlayersWithLeagueContext(
+    players: Player[], 
+    leagueData: ESPNLeagueData
+  ): Promise<ESPNLeaguePlayerData[]> {
+    return players.map(player => {
+      const isOwned = this.isPlayerOwned(player.id.toString(), leagueData);
+      const ownerTeam = this.getPlayerOwner(player.id.toString(), leagueData);
+      
+      return {
+        player: this.convertToESPNPlayer(player),
+        leagueContext: {
+          leagueId: leagueData.leagueId,
+          isAvailable: !isOwned,
+          ownedByTeam: ownerTeam,
+          recentActivity: {}, // Would be populated from transaction data
+        },
+        projections: {
+          playerId: player.id.toString(),
+          playerName: player.name,
+          position: player.position,
+          team: player.team,
+          projectedPoints: {
+            standard: player.standard,
+            ppr: player.ppr,
+            halfPpr: player.halfPpr,
+          },
+          stats: {}, // Would include detailed projections
+        },
+        trends: {
+          weeklyTarget: player.tier <= 3 && !isOwned, // Top tier available players
+          longTermValue: Math.max(0, Math.min(100, player.ppr * 5)), // Scale to 0-100
+          injuryRisk: player.injury === 'Healthy' ? 10 : 60, // Basic risk assessment
+        }
+      };
+    });
+  }
+
+  private async generateLeagueNewsDigest(
+    allNews: ESPNNewsItem[], 
+    leagueData: ESPNLeagueData
+  ): Promise<LeagueNewsDigest> {
+    // Filter news relevant to league rosters
+    const ownedPlayerIds = this.getOwnedPlayerIds(leagueData);
+    const relevantNews = allNews.filter(news => 
+      news.affectedPlayers.some(p => 
+        ownedPlayerIds.includes(p.playerId) || 
+        news.impactScore >= 4 // High-impact news regardless of ownership
+      )
+    );
+
+    return {
+      leagueId: leagueData.leagueId,
+      lastUpdate: new Date(),
+      relevantNews,
+      playerAlerts: this.generatePlayerAlerts(relevantNews, leagueData),
+      leagueSpecificInsights: this.generateLeagueInsights(leagueData, relevantNews),
+    };
+  }
+
+  private generateMockTeams(leagueId: string) {
+    const teamCount = leagueId === '1602776' ? 12 : 10;
+    return Array.from({ length: teamCount }, (_, i) => ({
+      id: `team_${i + 1}`,
+      name: `Team ${i + 1}`,
+      owner: `Owner ${i + 1}`,
+      roster: [], // Would be populated with actual players
+      record: { wins: Math.floor(Math.random() * 10), losses: Math.floor(Math.random() * 5), ties: 0 },
+      points: { total: Math.random() * 1000 + 800, average: Math.random() * 50 + 100 },
+    }));
+  }
+
+  private isPlayerOwned(playerId: string, leagueData: ESPNLeagueData): boolean {
+    // Mock implementation - would check actual rosters
+    return Math.random() > 0.7; // 30% of players are owned
+  }
+
+  private getPlayerOwner(playerId: string, leagueData: ESPNLeagueData): string | undefined {
+    // Mock implementation - would return actual owner
+    return this.isPlayerOwned(playerId, leagueData) ? 'team_1' : undefined;
+  }
+
+  private getOwnedPlayerIds(leagueData: ESPNLeagueData): string[] {
+    // Extract all player IDs from all team rosters
+    return leagueData.teams.flatMap(team => 
+      team.roster.map(player => player.id)
+    );
+  }
+
+  private generatePlayerAlerts(news: ESPNNewsItem[], leagueData: ESPNLeagueData) {
+    return news
+      .filter(n => n.severity === 'high' || n.severity === 'urgent')
+      .map(n => n.affectedPlayers.map(p => ({
+        playerId: p.playerId,
+        playerName: p.playerName,
+        alertType: n.category as any,
+        urgency: n.severity === 'urgent' ? 'high' as const : 'medium' as const,
+        message: n.headline,
+        actionRecommended: this.getActionRecommendation(n, p, leagueData),
+      })))
+      .flat();
+  }
+
+  private generateLeagueInsights(leagueData: ESPNLeagueData, news: ESPNNewsItem[]) {
+    return [
+      {
+        category: 'roster_moves' as const,
+        insight: `${news.filter(n => n.category === 'injury').length} injury updates this week may create waiver opportunities`,
+        confidence: 75,
+        relevantPlayers: news.flatMap(n => n.affectedPlayers.map(p => p.playerId)),
+      }
+    ];
+  }
+
+  private getActionRecommendation(news: ESPNNewsItem, player: any, leagueData: ESPNLeagueData): string | undefined {
+    if (news.category === 'injury' && news.severity === 'high') {
+      return `Consider handcuff or replacement for ${player.playerName}`;
+    }
+    return undefined;
+  }
+
+  private convertToESPNPlayer(player: Player): ESPNPlayer {
+    return {
+      id: player.id.toString(),
+      displayName: player.name,
+      firstName: player.name.split(' ')[0] || '',
+      lastName: player.name.split(' ').slice(1).join(' ') || '',
+      position: {
+        name: player.position,
+        abbreviation: player.position,
+      },
+      team: {
+        id: player.team,
+        name: player.team,
+        abbreviation: player.team,
+      }
+    };
+  }
+
+  private getCurrentNFLWeek(): number {
+    // Simple calculation - in production would use actual NFL schedule
+    const now = new Date();
+    const seasonStart = new Date('2024-09-05'); // Approximate NFL season start
+    const weeksDiff = Math.floor((now.getTime() - seasonStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    return Math.max(1, Math.min(18, weeksDiff + 1));
+  }
+
+  private updateDataStreamStatus(leagueId: string, status: LeagueDataStream['connectionStatus']): void {
+    const stream = this.leagueDataStreams.get(leagueId);
+    if (stream) {
+      stream.connectionStatus = status;
+      stream.lastUpdate = new Date();
+      if (status === 'error') {
+        stream.errorCount++;
+      }
+    }
+  }
+
+  private startLeagueDataRefresh(): void {
+    // Start periodic refresh every 5 minutes for active leagues
+    setInterval(() => {
+      this.leagueDataStreams.forEach((stream, leagueId) => {
+        if (stream.connectionStatus === 'active') {
+          // Refresh league data in background
+          this.refreshLeagueDataBackground(leagueId);
+        }
+      });
+    }, 5 * 60 * 1000); // 5 minutes
+  }
+
+  private async refreshLeagueDataBackground(leagueId: string): Promise<void> {
+    try {
+      // Clear relevant cache entries to force refresh
+      const cacheKeys = [`league_data_${leagueId}`, `league_players_${leagueId}`, `league_news_${leagueId}`];
+      cacheKeys.forEach(key => this.cache.delete(key));
+      
+      // Trigger refresh
+      await Promise.all([
+        this.getLeagueData(leagueId),
+        this.getLeaguePlayersWithContext(leagueId),
+        this.getLeagueNewsDigest(leagueId),
+      ]);
+      
+      console.log(`🔄 Background refresh completed for league ${leagueId}`);
+    } catch (error) {
+      console.error(`❌ Background refresh failed for league ${leagueId}:`, error);
+      this.updateDataStreamStatus(leagueId, 'error');
+    }
+  }
+
+  /**
+   * Get league data streams status
+   */
+  getLeagueDataStreamsStatus(): Record<string, LeagueDataStream> {
+    return Object.fromEntries(this.leagueDataStreams);
+  }
+
+  /**
+   * Get known league configurations
+   */
+  static getKnownLeagues() {
+    return ESPN_CONFIG.LEAGUES;
   }
 }
 

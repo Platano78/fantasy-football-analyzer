@@ -11,9 +11,7 @@
 export { default as ErrorBoundary } from './ErrorBoundary';
 export { HealthCheck } from './HealthCheck';
 
-// Performance monitoring and simulation controls
-export { SimulationPerformanceAnalyzer } from './SimulationPerformanceAnalyzer';
-export { SimulationSpeedControls } from './SimulationSpeedControls';
+// Performance monitoring and draft controls
 export { DraftProgressIndicator } from './DraftProgressIndicator';
 
 // Legacy direct exports (to be organized into subdirectories)

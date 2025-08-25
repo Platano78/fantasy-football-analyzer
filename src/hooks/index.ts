@@ -1,12 +1,11 @@
 // Export all custom hooks from a single entry point
-export { useDraftSimulation } from './useDraftSimulation';
+export { useDraftData } from './useDraftData';
 export { usePlayerFiltering } from './usePlayerFiltering';
 export { usePlayerComparison } from './usePlayerComparison';
 export { useVirtualization } from './useVirtualization';
 
 // MCP integration hooks
 export { useMCPIntegration } from './useMCPIntegration';
-export { useBrowserMCP } from './useBrowserMCP';
 
 // Performance optimization hooks
 export { 

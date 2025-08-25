@@ -1,7 +1,7 @@
 import React, { memo, useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { Brain, TrendingUp, Target, Shield, Zap, Send, RotateCcw, Download, Sparkles, Bot, User, Copy, ThumbsUp, ThumbsDown, AlertTriangle, Calendar, Activity, BarChart3, Timer, Trophy, Clock, Search } from 'lucide-react';
 import { useFantasyFootball } from '@/contexts/FantasyFootballContext';
-import { useDraftSimulation } from '@/hooks';
+import { useDraftData } from '@/hooks';
 import { Player, Position, ScoringSystem, DraftStrategy, InjuryStatus } from '@/types';
 
 // Simplified chat message interface for performance
@@ -323,7 +323,7 @@ export default function AIView() {
   const [seasonPhase, setSeasonPhase] = useState<SeasonPhase>('draft');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  const { availablePlayers, currentRound } = useDraftSimulation();
+  const { availablePlayers, currentRound } = useDraftData();
 
   // Initialize with enhanced welcome message and proactive systems
   useEffect(() => {

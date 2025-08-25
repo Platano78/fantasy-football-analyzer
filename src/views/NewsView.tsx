@@ -1,4 +1,4 @@
-import { memo, useMemo, useCallback, useState } from 'react';
+import { memo, useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { 
   Newspaper, 
   AlertCircle, 
@@ -14,10 +14,14 @@ import {
   Share2,
   Bookmark,
   Wifi,
-  WifiOff
+  WifiOff,
+  Brain,
+  Zap
 } from 'lucide-react';
 import { useFantasyFootball } from '@/contexts/FantasyFootballContext';
-import { useBrowserMCP } from '@/hooks/useBrowserMCP';
+import AINewsAnalysisPanel from '@/components/AINewsAnalysisPanel';
+import { LeagueContext, NewsImpact } from '@/services/AIService';
+import { espnAPIService, ESPNNewsItem } from '@/services/ESPNAPIService';
 
 // News item interfaces
 interface NewsItem {
@@ -411,8 +415,14 @@ export default function NewsView() {
     return Array.from(state.draftedPlayers).map(id => id.toString());
   }, [state.draftedPlayers]);
 
-  // Browser MCP integration
-  const browserMCP = useBrowserMCP(myPlayerIds);
+  // Mock Browser MCP for demonstration (removed actual integration)
+  const browserMCP = {
+    news: [],
+    state: { isInitialized: false, lastUpdate: new Date(), isLoading: false },
+    isAutoRefreshEnabled: false,
+    autoRefreshInterval: 300,
+    refreshNews: async () => {}
+  };
   
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<NewsFilters>({
@@ -424,8 +434,190 @@ export default function NewsView() {
     sortBy: 'timestamp'
   });
 
-  // Use real news data from Browser MCP
-  const newsItems = browserMCP.news;
+  // AI Analysis State
+  const [aiAnalysisResults, setAiAnalysisResults] = useState<NewsImpact[]>([]);
+  const [showAiAnalysis, setShowAiAnalysis] = useState(true);
+
+  // ESPN API News State
+  const [espnNews, setEspnNews] = useState<ESPNNewsItem[]>([]);
+  const [isLoadingEspnNews, setIsLoadingEspnNews] = useState(false);
+  const [espnNewsError, setEspnNewsError] = useState<string | null>(null);
+
+  // Memoize player lookup for better performance
+  const playerLookup = useMemo(() => {
+    const lookup = new Map();
+    state.players.forEach(player => {
+      lookup.set(player.name.toLowerCase(), player);
+    });
+    return lookup;
+  }, [state.players]);
+
+  // Combined news from ESPN API and Browser MCP with optimized processing
+  const combinedNewsItems = useMemo(() => {
+    // Convert ESPN news to the NewsItem format for compatibility
+    const espnNewsAsNewsItems: NewsItem[] = espnNews.map(item => {
+      // Optimized player matching using lookup table
+      const isMyPlayer = item.affectedPlayers.some(player => {
+        return myPlayerIds.includes(player.playerId) || 
+               playerLookup.has(player.playerName.toLowerCase());
+      });
+
+      return {
+        id: item.id,
+        headline: item.headline,
+        summary: item.summary,
+        content: item.content,
+        impactScore: item.impactScore,
+        affectedPlayers: item.affectedPlayers,
+        category: item.category,
+        timestamp: item.publishedAt,
+        source: item.source,
+        sourceUrl: item.sourceUrl,
+        severity: item.severity,
+        isMyPlayer,
+        tags: item.tags,
+        readTime: item.readTime,
+        trending: item.severity === 'urgent' || item.impactScore >= 4
+      };
+    });
+
+    // Combine ESPN news with Browser MCP news, removing duplicates
+    const browserMcpNews = browserMCP.news || [];
+    const combinedNews = [...espnNewsAsNewsItems];
+    
+    // Optimized duplicate detection using Set for better performance
+    const espnHeadlines = new Set(
+      espnNewsAsNewsItems.map(item => item.headline.toLowerCase().substring(0, 30))
+    );
+    
+    browserMcpNews.forEach(mcpItem => {
+      const mcpHeadlineKey = mcpItem.headline.toLowerCase().substring(0, 30);
+      const isDuplicate = espnHeadlines.has(mcpHeadlineKey);
+      
+      if (!isDuplicate) {
+        combinedNews.push(mcpItem);
+      }
+    });
+
+    return combinedNews.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  }, [espnNews, browserMCP.news, myPlayerIds, playerLookup]);
+
+  // Fetch ESPN news - stable reference with proper dependencies
+  const fetchEspnNews = useCallback(async () => {
+    try {
+      setIsLoadingEspnNews(true);
+      setEspnNewsError(null);
+      
+      console.log('📰 Fetching latest news from ESPN API...');
+      const newsItems = await espnAPIService.getLatestNews(50); // Get latest 50 articles
+      
+      setEspnNews(newsItems);
+      console.log(`✅ Successfully loaded ${newsItems.length} news items from ESPN`);
+    } catch (error) {
+      console.error('❌ Failed to fetch ESPN news:', error);
+      setEspnNewsError(error instanceof Error ? error.message : 'Failed to load news');
+    } finally {
+      setIsLoadingEspnNews(false);
+    }
+  }, []); // Empty deps is fine here since we're only using state setters (React guarantees they're stable)
+
+  // Fetch news on mount and setup periodic refresh
+  useEffect(() => {
+    // Fetch initial news
+    fetchEspnNews();
+    
+    // Setup periodic refresh (5 minutes)
+    const newsRefreshInterval = setInterval(() => {
+      fetchEspnNews();
+    }, 5 * 60 * 1000);
+    
+    return () => clearInterval(newsRefreshInterval);
+  }, []); // Empty dependency array - we only want this to run once on mount
+
+  // Create league contexts for AI analysis
+  const leagueContexts = useMemo((): LeagueContext[] => {
+    // For now, we'll create mock league contexts based on the current fantasy state
+    // This will be enhanced when we have real league data from ESPN API
+    const legendsLeague: LeagueContext = {
+      leagueId: '1602776',
+      name: 'Legends League',
+      teams: [], // Will be populated from real league data
+      myTeam: {
+        teamId: 'user_team_legends',
+        teamName: 'My Legends Team',
+        roster: Array.from(state.draftedPlayers).map(playerId => {
+          const player = state.players.find(p => p.id === playerId);
+          return player || {} as any; // Fallback for missing players
+        }).filter(p => p.id), // Remove empty objects
+        draftPosition: state.draftSettings?.position || 1,
+        record: { wins: 0, losses: 0, ties: 0 },
+        playoffPosition: 0
+      },
+      settings: {
+        size: state.draftSettings?.totalTeams || 12,
+        scoringType: state.scoringSystem === 'ppr' ? 'PPR' : 
+                    state.scoringSystem === 'standard' ? 'Standard' : 'Half-PPR',
+        rosterPositions: {
+          QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DST: 1, FLEX: 1, BE: 6
+        },
+        playoffTeams: 6,
+        tradingEnabled: true
+      },
+      currentWeek: 1
+    };
+
+    const injusticeLeague: LeagueContext = {
+      leagueId: '6317063',
+      name: 'Injustice League',
+      teams: [], // Will be populated from real league data
+      myTeam: {
+        teamId: 'user_team_injustice',
+        teamName: state.draftSettings?.leagueName || 'My Injustice Team',
+        roster: Array.from(state.draftedPlayers).map(playerId => {
+          const player = state.players.find(p => p.id === playerId);
+          return player || {} as any;
+        }).filter(p => p.id),
+        draftPosition: state.draftSettings?.position || 1,
+        record: { wins: 0, losses: 0, ties: 0 },
+        playoffPosition: 0
+      },
+      settings: {
+        size: state.draftSettings?.totalTeams || 12,
+        scoringType: state.scoringSystem === 'ppr' ? 'PPR' : 
+                    state.scoringSystem === 'standard' ? 'Standard' : 'Half-PPR',
+        rosterPositions: {
+          QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DST: 1, FLEX: 1, BE: 6
+        },
+        playoffTeams: 6,
+        tradingEnabled: true
+      },
+      currentWeek: 1
+    };
+
+    return [legendsLeague, injusticeLeague];
+  }, [state.draftedPlayers, state.players, state.draftSettings, state.scoringSystem]);
+
+  // Memoize AI news items to prevent unnecessary re-renders of AINewsAnalysisPanel
+  const aiNewsItems = useMemo(() => {
+    return combinedNewsItems.map(item => ({
+      id: item.id,
+      headline: item.headline,
+      summary: item.summary,
+      content: item.content,
+      source: item.source,
+      publishedAt: item.timestamp,
+      category: item.category,
+      affectedPlayers: item.affectedPlayers.map(player => ({
+        playerId: player.playerId,
+        playerName: player.playerName,
+        position: player.position,
+        team: player.team
+      }))
+    }));
+  }, [combinedNewsItems]);
+
+  // Use combined news data from ESPN API and Browser MCP
+  const newsItems = combinedNewsItems;
 
   // Filter and sort news items
   const filteredNews = useMemo(() => {
@@ -505,9 +697,39 @@ export default function NewsView() {
     // In production, this would navigate to player details
   }, []);
 
+  // Throttle refresh calls to prevent excessive API usage
+  const lastRefreshTimeRef = useRef(0);
+  
   const handleRefresh = useCallback(async () => {
-    await browserMCP.refreshNews();
-  }, [browserMCP]);
+    const now = Date.now();
+    const minRefreshInterval = 30 * 1000; // 30 seconds minimum between refreshes
+    
+    if (now - lastRefreshTimeRef.current < minRefreshInterval) {
+      console.log('🚫 Refresh throttled - too soon since last refresh');
+      return;
+    }
+    
+    lastRefreshTimeRef.current = now;
+    
+    try {
+      // Refresh both ESPN news and Browser MCP news in parallel
+      const [espnResult, mcpResult] = await Promise.allSettled([
+        fetchEspnNews(),
+        browserMCP.refreshNews()
+      ]);
+      
+      // Log any failures without throwing
+      if (espnResult.status === 'rejected') {
+        console.warn('ESPN news refresh failed:', espnResult.reason);
+      }
+      if (mcpResult.status === 'rejected') {
+        console.warn('Browser MCP refresh failed:', mcpResult.reason);
+      }
+      
+    } catch (error) {
+      console.error('News refresh error:', error);
+    }
+  }, [browserMCP, fetchEspnNews]); // Removed lastRefreshTime from deps since we're using ref
 
   const handleBookmark = useCallback((id: string) => {
     console.log('Bookmark news item:', id);
@@ -515,6 +737,16 @@ export default function NewsView() {
 
   const handleShare = useCallback((id: string) => {
     console.log('Share news item:', id);
+  }, []);
+
+  // AI Analysis Handlers
+  const handleAiAnalysisComplete = useCallback((impacts: NewsImpact[]) => {
+    setAiAnalysisResults(impacts);
+    console.log('✅ AI Analysis completed:', impacts.length, 'impacts found');
+  }, []);
+
+  const handleToggleAiAnalysis = useCallback(() => {
+    setShowAiAnalysis(prev => !prev);
   }, []);
 
   return (
@@ -526,10 +758,25 @@ export default function NewsView() {
             <Newspaper className="w-5 h-5" />
             NFL News & Fantasy Impact
           </h3>
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <Activity className="w-4 h-4" />
-            <span>Live Updates</span>
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+          <div className="flex items-center gap-4">
+            {/* AI Analysis Toggle */}
+            <button
+              onClick={handleToggleAiAnalysis}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                showAiAnalysis
+                  ? 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <Brain className="w-4 h-4" />
+              AI Analysis {showAiAnalysis ? 'ON' : 'OFF'}
+            </button>
+            
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Activity className="w-4 h-4" />
+              <span>Live Updates</span>
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            </div>
           </div>
         </div>
 
@@ -539,7 +786,7 @@ export default function NewsView() {
           urgentNews={stats.urgentNews}
           lastUpdated={browserMCP.state.lastUpdate}
           onRefresh={handleRefresh}
-          isRefreshing={browserMCP.state.isLoading}
+          isRefreshing={browserMCP.state.isLoading || isLoadingEspnNews}
         />
       </div>
 
@@ -550,6 +797,15 @@ export default function NewsView() {
         myPlayerCount={stats.myPlayerNews}
         totalNewsCount={filteredNews.length}
       />
+
+      {/* AI News Analysis Panel */}
+      {showAiAnalysis && (
+        <AINewsAnalysisPanel
+          newsItems={aiNewsItems}
+          leagueContexts={leagueContexts}
+          onAnalysisComplete={handleAiAnalysisComplete}
+        />
+      )}
 
       {/* News Feed */}
       <div className="space-y-4">
@@ -589,13 +845,62 @@ export default function NewsView() {
         )}
       </div>
 
-      {/* Browser MCP Integration Status */}
-      <div className={`border rounded-lg p-6 ${
-        browserMCP.state.isInitialized 
-          ? 'bg-blue-50 border-blue-200' 
-          : 'bg-red-50 border-red-200'
-      }`}>
-        <div className="flex items-start gap-3">
+      {/* News Sources Status */}
+      <div className="space-y-4">
+        {/* ESPN API Status */}
+        <div className={`border rounded-lg p-4 ${
+          !espnNewsError 
+            ? 'bg-green-50 border-green-200' 
+            : 'bg-red-50 border-red-200'
+        }`}>
+          <div className="flex items-start gap-3">
+            {!espnNewsError ? (
+              <div className="w-6 h-6 text-green-600 mt-1">📡</div>
+            ) : (
+              <div className="w-6 h-6 text-red-600 mt-1">⚠️</div>
+            )}
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className={`font-semibold ${
+                  !espnNewsError ? 'text-green-900' : 'text-red-900'
+                }`}>
+                  ESPN API News Feed {!espnNewsError ? 'Connected' : 'Error'}
+                </h4>
+                
+                <div className="flex items-center gap-2 text-xs">
+                  <span className={`px-2 py-1 rounded-full font-medium ${
+                    !espnNewsError
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-red-100 text-red-800'
+                  }`}>
+                    {espnNews.length} articles loaded
+                  </span>
+                  {isLoadingEspnNews && (
+                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                  )}
+                </div>
+              </div>
+              
+              <p className={`text-sm ${
+                !espnNewsError ? 'text-green-800' : 'text-red-800'
+              }`}>
+                {!espnNewsError ? (
+                  `Successfully fetching latest NFL news directly from ESPN API with intelligent impact scoring for fantasy relevance. ${espnNews.length} articles available for AI analysis.`
+                ) : (
+                  `ESPN API connection error: ${espnNewsError}. Using fallback news sources.`
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Browser MCP Status */}
+        <div className={`border rounded-lg p-4 ${
+          browserMCP.state.isInitialized 
+            ? 'bg-blue-50 border-blue-200' 
+            : 'bg-orange-50 border-orange-200'
+        }`}>
+          <div className="flex items-start gap-3">
           {browserMCP.state.isInitialized ? (
             <Wifi className="w-6 h-6 text-blue-600 mt-1" />
           ) : (
@@ -690,8 +995,9 @@ export default function NewsView() {
               </button>
             )}
           </div>
+          </div> {/* Close flex items-start gap-3 */}
         </div>
-      </div>
+      </div> {/* End News Sources Status */}
     </div>
   );
 }

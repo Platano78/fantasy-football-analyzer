@@ -25,11 +25,6 @@ export interface EnvironmentConfig {
   LOCAL_GEMINI_ENABLED: boolean;
   LOCAL_GEMINI_TIMEOUT: number;
   
-  // Browser MCP Configuration
-  BROWSER_MCP_ENABLED: boolean;
-  BROWSER_MCP_TIMEOUT: number;
-  BROWSER_MCP_RETRY_ATTEMPTS: number;
-  BROWSER_MCP_RATE_LIMIT: number;
   
   // Caching Configuration
   CACHE_DEFAULT_TTL: number;
@@ -45,7 +40,6 @@ export interface EnvironmentConfig {
   // Feature Flags
   FEATURES: {
     ESPN_API: boolean;
-    BROWSER_MCP: boolean;
     LOCAL_GEMINI: boolean;
     CLOUD_GEMINI: boolean;
     AI_COACHING: boolean;
@@ -86,13 +80,11 @@ const getEnvironmentDefaults = (env: Environment): Partial<EnvironmentConfig> =>
         ESPN_API_TIMEOUT: 10000,
         GEMINI_TIMEOUT: 30000,
         LOCAL_GEMINI_ENABLED: true,
-        BROWSER_MCP_ENABLED: true,
         CACHE_DEFAULT_TTL: 5 * 60 * 1000, // 5 minutes
         PERFORMANCE_MONITORING_ENABLED: false,
         RUM_ENABLED: false,
         FEATURES: {
           ESPN_API: true,
-          BROWSER_MCP: true,
           LOCAL_GEMINI: true,
           CLOUD_GEMINI: true,
           AI_COACHING: true,
@@ -109,13 +101,11 @@ const getEnvironmentDefaults = (env: Environment): Partial<EnvironmentConfig> =>
         ESPN_API_TIMEOUT: 8000,
         GEMINI_TIMEOUT: 25000,
         LOCAL_GEMINI_ENABLED: true,
-        BROWSER_MCP_ENABLED: true,
         CACHE_DEFAULT_TTL: 10 * 60 * 1000, // 10 minutes
         PERFORMANCE_MONITORING_ENABLED: true,
         RUM_ENABLED: true,
         FEATURES: {
           ESPN_API: true,
-          BROWSER_MCP: true,
           LOCAL_GEMINI: true,
           CLOUD_GEMINI: true,
           AI_COACHING: true,
@@ -132,13 +122,11 @@ const getEnvironmentDefaults = (env: Environment): Partial<EnvironmentConfig> =>
         ESPN_API_TIMEOUT: 6000,
         GEMINI_TIMEOUT: 20000,
         LOCAL_GEMINI_ENABLED: false, // Disable local in production by default
-        BROWSER_MCP_ENABLED: true,
         CACHE_DEFAULT_TTL: 15 * 60 * 1000, // 15 minutes
         PERFORMANCE_MONITORING_ENABLED: false, // Disable monitoring to prevent console errors
         RUM_ENABLED: false, // Disable RUM to prevent console errors
         FEATURES: {
           ESPN_API: true,
-          BROWSER_MCP: true,
           LOCAL_GEMINI: false, // CRITICAL: Disable local Gemini in production
           CLOUD_GEMINI: false, // Disable cloud Gemini for now to prevent API calls
           AI_COACHING: false, // Disable AI coaching for now
@@ -155,13 +143,11 @@ const getEnvironmentDefaults = (env: Environment): Partial<EnvironmentConfig> =>
         ESPN_API_TIMEOUT: 5000,
         GEMINI_TIMEOUT: 10000,
         LOCAL_GEMINI_ENABLED: false,
-        BROWSER_MCP_ENABLED: false,
         CACHE_DEFAULT_TTL: 1000, // 1 second for testing
         PERFORMANCE_MONITORING_ENABLED: false,
         RUM_ENABLED: false,
         FEATURES: {
           ESPN_API: false, // Use mocks in testing
-          BROWSER_MCP: false,
           LOCAL_GEMINI: false,
           CLOUD_GEMINI: false,
           AI_COACHING: false,
@@ -235,23 +221,6 @@ export const buildConfig = (): EnvironmentConfig => {
       30000
     ),
     
-    // Browser MCP Configuration
-    BROWSER_MCP_ENABLED: parseBoolean(
-      import.meta.env?.VITE_BROWSER_MCP_ENABLED,
-      defaults.BROWSER_MCP_ENABLED || true
-    ),
-    BROWSER_MCP_TIMEOUT: parseNumber(
-      import.meta.env?.VITE_BROWSER_MCP_TIMEOUT,
-      15000
-    ),
-    BROWSER_MCP_RETRY_ATTEMPTS: parseNumber(
-      import.meta.env?.VITE_BROWSER_MCP_RETRY_ATTEMPTS,
-      3
-    ),
-    BROWSER_MCP_RATE_LIMIT: parseNumber(
-      import.meta.env?.VITE_BROWSER_MCP_RATE_LIMIT,
-      5000 // 5 seconds between requests
-    ),
     
     // Caching Configuration
     CACHE_DEFAULT_TTL: parseNumber(
@@ -278,10 +247,6 @@ export const buildConfig = (): EnvironmentConfig => {
       ESPN_API: parseBoolean(
         import.meta.env?.VITE_FEATURE_ESPN_API,
         defaults.FEATURES?.ESPN_API || true
-      ),
-      BROWSER_MCP: parseBoolean(
-        import.meta.env?.VITE_FEATURE_BROWSER_MCP,
-        defaults.FEATURES?.BROWSER_MCP || true
       ),
       LOCAL_GEMINI: parseBoolean(
         import.meta.env?.VITE_FEATURE_LOCAL_GEMINI,
@@ -397,7 +362,6 @@ export const getConfigSummary = (): Record<string, any> => {
       .map(([feature]) => feature),
     services: {
       espnApi: config.FEATURES.ESPN_API,
-      browserMcp: config.FEATURES.BROWSER_MCP,
       localGemini: config.FEATURES.LOCAL_GEMINI && config.LOCAL_GEMINI_ENABLED,
       cloudGemini: config.FEATURES.CLOUD_GEMINI,
       aiCoaching: config.FEATURES.AI_COACHING,

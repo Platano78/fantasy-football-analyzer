@@ -336,6 +336,7 @@ export interface NFLLeagueSyncerProps {
   onSyncComplete?: (results: SyncResult[]) => void;
   onSyncProgress?: (progress: SyncProgress) => void;
   onSyncError?: (error: NFLSyncError) => void;
+  onLeagueCollectionUpdate?: (leagueCollection: NFLLeagueCollection) => void;
   config?: Partial<NFLSyncConfig>;
   className?: string;
 }

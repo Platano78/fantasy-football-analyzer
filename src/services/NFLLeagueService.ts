@@ -749,6 +749,14 @@ export class NFLLeagueService {
   }
 
   // Utility Methods
+  async addLeague(league: NFLLeague): Promise<void> {
+    console.log(`🔄 Adding league to storage: ${league.name} (${league.id})`);
+    this.storage.leagues[league.id] = league;
+    this.saveToStorage();
+    this.notifySubscribers('leagueAdded', league);
+    console.log(`✅ League added successfully: ${league.name}`);
+  }
+
   async removeLeague(leagueId: string): Promise<void> {
     delete this.storage.leagues[leagueId];
     this.saveToStorage();

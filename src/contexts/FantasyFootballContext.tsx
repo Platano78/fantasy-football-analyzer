@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
-import { FantasyFootballState, FantasyFootballAction, Player, Team, DraftSettings } from '@/types';
+import { FantasyFootballState, FantasyFootballAction, Player, Team, DraftSettings, DraftRoomState } from '@/types';
 // Import comprehensive mock data from extracted data module
 import { MOCK_PLAYERS, MOCK_TEAMS } from '../utils/mcpProxy';
 
@@ -10,6 +10,14 @@ const initialDraftSettings: DraftSettings = {
   leagueName: "Injustice",
   draftTime: "Sunday, Aug 24, 2025 9:00pm EDT",
   timePerPick: 60
+};
+
+const initialDraftRoomState: DraftRoomState = {
+  connection: null,
+  autoSync: false,
+  syncInterval: 30000, // 30 seconds
+  isLiveDraft: false,
+  lastServerUpdate: null
 };
 
 const initialState: FantasyFootballState = {
@@ -56,6 +64,9 @@ const initialState: FantasyFootballState = {
   // Live data state
   isUpdatingData: false,
   isDraftTracking: false,
+  
+  // Draft room connection state
+  draftRoomState: initialDraftRoomState,
   
   // Export state
   exportFormat: 'csv',
@@ -212,6 +223,55 @@ function fantasyFootballReducer(state: FantasyFootballState, action: FantasyFoot
         isTimerActive: false,
         timerWarning: false,
         showTimerExpired: false,
+      };
+    
+    case 'SET_DRAFT_ROOM_CONNECTION':
+      return {
+        ...state,
+        draftRoomState: {
+          ...state.draftRoomState,
+          connection: action.payload
+        }
+      };
+    
+    case 'UPDATE_CONNECTION_STATUS':
+      if (!state.draftRoomState.connection) return state;
+      return {
+        ...state,
+        draftRoomState: {
+          ...state.draftRoomState,
+          connection: {
+            ...state.draftRoomState.connection,
+            status: action.payload
+          }
+        }
+      };
+    
+    case 'SET_AUTO_SYNC':
+      return {
+        ...state,
+        draftRoomState: {
+          ...state.draftRoomState,
+          autoSync: action.payload
+        }
+      };
+    
+    case 'SET_LIVE_DRAFT_STATUS':
+      return {
+        ...state,
+        draftRoomState: {
+          ...state.draftRoomState,
+          isLiveDraft: action.payload
+        }
+      };
+    
+    case 'UPDATE_LAST_SERVER_UPDATE':
+      return {
+        ...state,
+        draftRoomState: {
+          ...state.draftRoomState,
+          lastServerUpdate: action.payload
+        }
       };
     
     default:

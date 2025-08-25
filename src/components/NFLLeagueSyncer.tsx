@@ -17,6 +17,7 @@ interface NFLLeagueSyncerProps {
   onSyncComplete?: (results: SyncResult[]) => void;
   onSyncProgress?: (progress: SyncProgress) => void;
   onSyncError?: (error: NFLSyncError) => void;
+  onLeagueCollectionUpdate?: (leagueCollection: NFLLeagueCollection) => void;
   config?: Partial<NFLSyncConfig>;
   className?: string;
 }
@@ -55,6 +56,7 @@ export const NFLLeagueSyncer: React.FC<NFLLeagueSyncerProps> = ({
   onSyncComplete,
   onSyncProgress,
   onSyncError,
+  onLeagueCollectionUpdate,
   config = {},
   className = ''
 }) => {
@@ -906,15 +908,22 @@ export const NFLLeagueSyncer: React.FC<NFLLeagueSyncerProps> = ({
       // Extract league data
       const league = await extractLeagueData(config);
 
-      // Update league collection
-      setLeagueCollection(prev => ({
-        ...prev,
-        leagues: {
-          ...prev.leagues,
-          [config.id]: league
-        },
-        activeLeagueId: prev.activeLeagueId || config.id
-      }));
+      // Update league collection with functional update to ensure latest state
+      setLeagueCollection(prev => {
+        const updatedCollection = {
+          ...prev,
+          leagues: {
+            ...prev.leagues,
+            [config.id]: league
+          },
+          activeLeagueId: prev.activeLeagueId || config.id
+        };
+        
+        // Notify parent component for data persistence
+        onLeagueCollectionUpdate?.(updatedCollection);
+        
+        return updatedCollection;
+      });
 
       const result: SyncResult = {
         leagueId: config.id,
@@ -1315,11 +1324,11 @@ export const NFLLeagueSyncer: React.FC<NFLLeagueSyncerProps> = ({
       <div className="mt-6 pt-4 border-t border-gray-200">
         <div className="flex items-center justify-between text-sm text-gray-500 mb-2">
           <div className="flex items-center gap-4">
-            <span className={`font-medium ${browserSession.isActive && browserSession.browserMCPAvailable ? 'text-green-600' : 'text-red-600'}`}>
-              Browser MCP: {browserSession.isActive && browserSession.browserMCPAvailable ? '🟢 Active' : '🔴 Inactive'}
+            <span className={`font-medium ${browserSession.isActive && browserSession.browserMCPAvailable ? 'text-green-600' : 'text-blue-600'}`}>
+              Browser MCP: {browserSession.isActive && browserSession.browserMCPAvailable ? '🟢 Active' : '🔵 Standby'}
             </span>
-            <span className={`font-medium ${browserSession.authenticated ? 'text-green-600' : 'text-orange-600'}`}>
-              Auth Status: {browserSession.authenticated ? '🔐 Authenticated' : '🔓 Not Authenticated'}
+            <span className={`font-medium ${browserSession.authenticated ? 'text-green-600' : 'text-blue-600'}`}>
+              Auth Status: {browserSession.authenticated ? '🔐 Authenticated' : '🔵 Ready for Manual Auth'}
             </span>
           </div>
           <div>
@@ -1327,15 +1336,28 @@ export const NFLLeagueSyncer: React.FC<NFLLeagueSyncerProps> = ({
           </div>
         </div>
         
+        {/* Informational Message */}
+        <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
+          <div className="flex items-center gap-2">
+            <span>ℹ️</span>
+            <div>
+              {browserSession.browserMCPAvailable ? 
+                "Browser MCP is actively controlling this session through Claude Code" :
+                "To activate Browser MCP automation: Ask Claude Code to 'navigate to https://fantasy-football-analyzer.netlify.app and help me sync my NFL leagues'. Manual operation mode currently active."
+              }
+            </div>
+          </div>
+        </div>
+        
         {/* Additional Browser MCP Details */}
-        <div className="text-xs text-gray-400">
+        <div className="text-xs text-gray-400 mt-1">
           <div className="flex items-center gap-6">
             <span>
-              Functions Available: {browserSession.availableFunctions?.length || 0}/6
+              MCP Functions: {browserSession.availableFunctions?.length || 0}/6
             </span>
             {browserSession.availableFunctions && browserSession.availableFunctions.length > 0 && (
               <span title={browserSession.availableFunctions.join(', ')}>
-                {browserSession.availableFunctions.slice(0, 2).join(', ')}
+                Available: {browserSession.availableFunctions.slice(0, 2).join(', ')}
                 {browserSession.availableFunctions.length > 2 && ` +${browserSession.availableFunctions.length - 2} more`}
               </span>
             )}

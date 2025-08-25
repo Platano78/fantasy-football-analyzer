@@ -1,7 +1,7 @@
 import { memo, useMemo, useCallback, useState } from 'react';
 import { Users, Play, Pause, RotateCcw, TrendingUp, CheckCircle, AlertTriangle, X } from 'lucide-react';
 import { useFantasyFootball } from '@/contexts/FantasyFootballContext';
-import { useDraftSimulation, usePlayerFiltering, usePlayerComparison, useVirtualization } from '@/hooks';
+import { useDraftData, usePlayerFiltering, usePlayerComparison, useVirtualization } from '@/hooks';
 import { Player, Position, ScoringSystem } from '@/types';
 import { DraftTimer, PlayerComparisonModal, DraftBoardFilters } from '@/components';
 
@@ -293,7 +293,7 @@ export default function DraftView() {
     draftPlayer,
     resetDraft,
     availablePlayers
-  } = useDraftSimulation();
+  } = useDraftData();
   
   const {
     players: filteredPlayers,

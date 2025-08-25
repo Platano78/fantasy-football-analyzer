@@ -1,8 +1,19 @@
 import { memo, useMemo, useCallback, useState, useEffect } from 'react';
-import { Clock, Play, Pause, RotateCcw, Target, Volume2, Eye, X, Zap, Bell, Timer, TrendingUp } from 'lucide-react';
+import { Clock, Play, Pause, RotateCcw, Target, Volume2, X, Zap, Bell, Timer, TrendingUp, Wifi, WifiOff, Link, Globe, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { useFantasyFootball } from '@/contexts/FantasyFootballContext';
-import { useDraftSimulation } from '@/hooks';
-import { Player, Position } from '@/types';
+import { useDraftData } from '@/hooks';
+import { Player, Position, DraftRoomProvider, DraftRoomConnection, ConnectionStatus } from '@/types';
+import { 
+  extractLeagueId, 
+  validateDraftRoomUrl, 
+  createDraftRoomConnection,
+  simulateConnection,
+  simulateSync,
+  getConnectionStatusColor,
+  formatTimeSince,
+  getProviderDisplayName,
+  getProviderExampleUrl 
+} from '@/utils/draftRoomConnector';
 // import { DraftTimer } from '@/components';
 
 // Memoized timer display with enhanced visual feedback
@@ -246,6 +257,268 @@ const NotificationCenter = memo(({
 
 NotificationCenter.displayName = 'NotificationCenter';
 
+// Memoized draft room URL input component
+const DraftRoomURLInput = memo(({
+  onConnect,
+  isConnecting
+}: {
+  onConnect: (provider: DraftRoomProvider, url: string) => void;
+  isConnecting: boolean;
+}) => {
+  const [provider, setProvider] = useState<DraftRoomProvider>('espn');
+  const [url, setUrl] = useState('');
+
+  const handleConnect = useCallback(() => {
+    if (url.trim()) {
+      onConnect(provider, url.trim());
+    }
+  }, [provider, url, onConnect]);
+
+  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !isConnecting) {
+      handleConnect();
+    }
+  }, [handleConnect, isConnecting]);
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+        <Link className="w-4 h-4" />
+        Connect to Draft Room
+      </h4>
+      
+      <div className="space-y-4">
+        <div className="grid grid-cols-4 gap-2">
+          {(['espn', 'nfl', 'yahoo', 'sleeper'] as DraftRoomProvider[]).map(p => (
+            <button
+              key={p}
+              onClick={() => setProvider(p)}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                provider === p
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {p.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        
+        <div className="flex gap-2">
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder={getProviderExampleUrl(provider)}
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            disabled={isConnecting}
+          />
+          <button
+            onClick={handleConnect}
+            disabled={!url.trim() || isConnecting}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+              !url.trim() || isConnecting
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
+          >
+            {isConnecting ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Connecting...
+              </>
+            ) : (
+              <>
+                <Globe className="w-4 h-4" />
+                Connect
+              </>
+            )}
+          </button>
+        </div>
+        
+        <div className="text-xs text-gray-500">
+          <p>Supported URLs:</p>
+          <ul className="list-disc list-inside mt-1 space-y-1">
+            <li>ESPN: fantasy.espn.com/football/draft?leagueId=...</li>
+            <li>NFL: fantasy.nfl.com/league/.../draftroom</li>
+            <li>Yahoo: football.fantasysports.yahoo.com/league/.../draft</li>
+            <li>Sleeper: sleeper.app/draft/...</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+DraftRoomURLInput.displayName = 'DraftRoomURLInput';
+
+// Memoized connection status component
+const ConnectionStatusDisplay = memo(({
+  connection,
+  onDisconnect,
+  onSync
+}: {
+  connection: DraftRoomConnection;
+  onDisconnect: () => void;
+  onSync: () => void;
+}) => {
+
+  const getStatusIcon = useCallback((status: ConnectionStatus) => {
+    switch (status) {
+      case 'connected': return <Wifi className="w-4 h-4" />;
+      case 'connecting': return <RefreshCw className="w-4 h-4 animate-spin" />;
+      case 'syncing': return <RefreshCw className="w-4 h-4 animate-spin" />;
+      case 'error': return <WifiOff className="w-4 h-4" />;
+      default: return <WifiOff className="w-4 h-4" />;
+    }
+  }, []);
+
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+          <Globe className="w-4 h-4" />
+          Draft Room Connection
+        </h4>
+        <button
+          onClick={onDisconnect}
+          className="text-sm text-red-600 hover:text-red-700 flex items-center gap-1"
+        >
+          <X className="w-3 h-3" />
+          Disconnect
+        </button>
+      </div>
+      
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-600">Platform</span>
+          <span className="text-sm font-medium text-gray-900">{getProviderDisplayName(connection.provider)}</span>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-600">Status</span>
+          <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getConnectionStatusColor(connection.status)}`}>
+            {getStatusIcon(connection.status)}
+            {connection.status.charAt(0).toUpperCase() + connection.status.slice(1)}
+          </div>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-600">Last Sync</span>
+          <span className="text-sm font-medium text-gray-900">{formatTimeSince(connection.lastSync)}</span>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-600">League ID</span>
+          <span className="text-sm font-medium text-gray-900 font-mono">{connection.leagueId}</span>
+        </div>
+        
+        {connection.error && (
+          <div className="p-2 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-xs text-red-700">{connection.error}</p>
+          </div>
+        )}
+        
+        <div className="flex gap-2 pt-2">
+          <button
+            onClick={onSync}
+            disabled={connection.status === 'syncing' || connection.status === 'connecting'}
+            className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+              connection.status === 'syncing' || connection.status === 'connecting'
+                ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
+          >
+            <RefreshCw className={`w-3 h-3 ${connection.status === 'syncing' ? 'animate-spin' : ''}`} />
+            Sync Now
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+ConnectionStatusDisplay.displayName = 'ConnectionStatusDisplay';
+
+// Memoized real-time sync indicators
+const SyncStatusIndicators = memo(({
+  isLiveDraft,
+  autoSync,
+  lastServerUpdate,
+  onToggleAutoSync
+}: {
+  isLiveDraft: boolean;
+  autoSync: boolean;
+  lastServerUpdate: Date | null;
+  onToggleAutoSync: () => void;
+}) => {
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const getUpdateAge = useCallback(() => {
+    if (!lastServerUpdate) return 'No updates';
+    const diff = Math.floor((currentTime.getTime() - lastServerUpdate.getTime()) / 1000);
+    if (diff < 60) return `Updated ${diff}s ago`;
+    if (diff < 3600) return `Updated ${Math.floor(diff / 60)}m ago`;
+    return `Updated ${Math.floor(diff / 3600)}h ago`;
+  }, [currentTime, lastServerUpdate]);
+
+  return (
+    <div className="bg-gradient-to-r from-blue-50 to-green-50 rounded-lg p-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {isLiveDraft ? (
+              <>
+                <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                <span className="text-sm font-medium text-gray-900">Live Draft Active</span>
+              </>
+            ) : (
+              <>
+                <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
+                <span className="text-sm font-medium text-gray-900">Draft Not Started</span>
+              </>
+            )}
+          </div>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Timer className="w-4 h-4 text-blue-500" />
+            <span className="text-sm text-gray-600">{getUpdateAge()}</span>
+          </div>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Auto-sync</span>
+            <button
+              onClick={onToggleAutoSync}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                autoSync ? 'bg-blue-600' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                  autoSync ? 'translate-x-5' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+SyncStatusIndicators.displayName = 'SyncStatusIndicators';
+
 // Main TrackerView component
 export default function TrackerView() {
   const { state, dispatch } = useFantasyFootball();
@@ -255,7 +528,7 @@ export default function TrackerView() {
     message: string;
     timestamp: Date;
   }>>([]);
-  const [isDraftTracking, setIsDraftTracking] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [draftSettings] = useState({
     totalTeams: 12,
     rounds: 16,
@@ -273,7 +546,7 @@ export default function TrackerView() {
     showTimerExpired,
     draftPlayer,
     availablePlayers
-  } = useDraftSimulation();
+  } = useDraftData();
 
   // Memoized computed values
   const totalPicks = useMemo(() => draftSettings.totalTeams * draftSettings.rounds, [draftSettings]);
@@ -355,12 +628,111 @@ export default function TrackerView() {
 
   const handlePlayerClick = useCallback((player: Player) => {
     if (isDraftActive && isUserTurn) {
-      draftPlayer(player.id);
+      draftPlayer();
       addNotification('success', `Drafted ${player.name} (${player.position})`);
     } else {
       addNotification('info', `Viewing ${player.name} details`);
     }
   }, [isDraftActive, isUserTurn, draftPlayer, addNotification]);
+
+  // Draft room connection handlers
+  const handleConnect = useCallback(async (provider: DraftRoomProvider, url: string) => {
+    // Validate URL format
+    if (!validateDraftRoomUrl(provider, url)) {
+      addNotification('error', `Invalid ${getProviderDisplayName(provider)} URL format`);
+      return;
+    }
+
+    // Extract league ID
+    const leagueId = extractLeagueId(provider, url);
+    if (!leagueId) {
+      addNotification('error', 'Could not extract league ID from URL');
+      return;
+    }
+
+    // Create connection and set connecting status
+    const connection = createDraftRoomConnection(provider, url, leagueId);
+    connection.status = 'connecting';
+    
+    setIsConnecting(true);
+    dispatch({ type: 'SET_DRAFT_ROOM_CONNECTION', payload: connection });
+    addNotification('info', `Connecting to ${getProviderDisplayName(provider)} draft room...`);
+
+    try {
+      // Attempt connection
+      const result = await simulateConnection(connection);
+      
+      if (result.success) {
+        dispatch({ type: 'UPDATE_CONNECTION_STATUS', payload: 'connected' });
+        dispatch({ type: 'UPDATE_LAST_SERVER_UPDATE', payload: new Date() });
+        addNotification('success', `Connected to ${getProviderDisplayName(provider)}!`);
+      } else {
+        dispatch({ type: 'UPDATE_CONNECTION_STATUS', payload: 'error' });
+        addNotification('error', result.error || 'Connection failed');
+      }
+    } catch (error) {
+      dispatch({ type: 'UPDATE_CONNECTION_STATUS', payload: 'error' });
+      addNotification('error', 'Connection failed - please try again');
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [dispatch, addNotification]);
+
+  const handleDisconnect = useCallback(() => {
+    dispatch({ type: 'SET_DRAFT_ROOM_CONNECTION', payload: null });
+    dispatch({ type: 'SET_AUTO_SYNC', payload: false });
+    dispatch({ type: 'SET_LIVE_DRAFT_STATUS', payload: false });
+    addNotification('info', 'Disconnected from draft room');
+  }, [dispatch, addNotification]);
+
+  const handleSync = useCallback(async () => {
+    if (!state.draftRoomState.connection) return;
+    
+    dispatch({ type: 'UPDATE_CONNECTION_STATUS', payload: 'syncing' });
+    addNotification('info', 'Syncing draft room data...');
+
+    try {
+      const result = await simulateSync(state.draftRoomState.connection);
+      
+      if (result.success) {
+        dispatch({ type: 'UPDATE_CONNECTION_STATUS', payload: 'connected' });
+        dispatch({ type: 'UPDATE_LAST_SERVER_UPDATE', payload: new Date() });
+        addNotification('success', 'Draft room data synced successfully');
+        
+        // In a real implementation, you would update the draft state with result.data
+        if (result.data) {
+          // Update draft state based on synced data
+          // dispatch({ type: 'UPDATE_DRAFT_FROM_SYNC', payload: result.data });
+        }
+      } else {
+        dispatch({ type: 'UPDATE_CONNECTION_STATUS', payload: 'error' });
+        addNotification('error', result.error || 'Sync failed');
+      }
+    } catch {
+      dispatch({ type: 'UPDATE_CONNECTION_STATUS', payload: 'error' });
+      addNotification('error', 'Sync failed - please try again');
+    }
+  }, [state.draftRoomState.connection, dispatch, addNotification]);
+
+  const handleToggleAutoSync = useCallback(() => {
+    const newAutoSync = !state.draftRoomState.autoSync;
+    dispatch({ type: 'SET_AUTO_SYNC', payload: newAutoSync });
+    addNotification('info', `Auto-sync ${newAutoSync ? 'enabled' : 'disabled'}`);
+  }, [state.draftRoomState.autoSync, dispatch, addNotification]);
+
+  // Auto-sync effect
+  useEffect(() => {
+    if (!state.draftRoomState.autoSync || !state.draftRoomState.connection || 
+        state.draftRoomState.connection.status !== 'connected') {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      handleSync();
+    }, state.draftRoomState.syncInterval);
+
+    return () => clearInterval(interval);
+  }, [state.draftRoomState.autoSync, state.draftRoomState.connection, state.draftRoomState.syncInterval, handleSync]);
 
   // Effects for automatic notifications
   useEffect(() => {
@@ -459,63 +831,90 @@ export default function TrackerView() {
         />
       </div>
 
-      {/* Live Draft Tracker */}
+      {/* Live Draft Room Connection */}
       <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
             <Zap className="w-5 h-5" />
-            Live Draft Tracker
+            Live Draft Room Connection
           </h3>
           <div className="flex items-center gap-2">
-            <Eye className="w-5 h-5 text-green-500" />
-            <span className="text-sm font-medium text-green-600">Ready</span>
+            {state.draftRoomState.connection ? (
+              <>
+                <CheckCircle className="w-5 h-5 text-green-500" />
+                <span className="text-sm font-medium text-green-600">Connected</span>
+              </>
+            ) : (
+              <>
+                <AlertCircle className="w-5 h-5 text-gray-400" />
+                <span className="text-sm font-medium text-gray-600">Not Connected</span>
+              </>
+            )}
           </div>
         </div>
+
+        {/* Real-time sync status indicators */}
+        {state.draftRoomState.connection && (
+          <SyncStatusIndicators
+            isLiveDraft={state.draftRoomState.isLiveDraft}
+            autoSync={state.draftRoomState.autoSync}
+            lastServerUpdate={state.draftRoomState.lastServerUpdate}
+            onToggleAutoSync={handleToggleAutoSync}
+          />
+        )}
         
-        <div className="bg-gradient-to-r from-blue-50 to-green-50 p-4 rounded-lg mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-bold text-lg text-gray-900">SUNDAY, AUGUST 24 • 9:00 PM EDT</div>
-              <div className="text-sm text-gray-600">Injustice League Draft • {draftSettings.timePerPick} seconds per pick</div>
-            </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-blue-600">3</div>
-              <div className="text-xs text-gray-600">Days Away</div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setIsDraftTracking(!isDraftTracking)}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                isDraftTracking
-                  ? 'bg-red-600 text-white hover:bg-red-700'
-                  : 'bg-green-600 text-white hover:bg-green-700'
-              }`}
-            >
-              {isDraftTracking ? (
-                <>
-                  <X className="w-4 h-4" />
-                  Stop Tracking
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4" />
-                  Start Tracking
-                </>
-              )}
-            </button>
-            
-            <div className="text-sm text-gray-600">
-              {isDraftTracking ? 'Monitoring draft room...' : 'Click to begin live draft tracking'}
-            </div>
-          </div>
+        <div className="grid lg:grid-cols-2 gap-6 mt-6">
+          {/* URL Input or Connection Status */}
+          {!state.draftRoomState.connection ? (
+            <DraftRoomURLInput
+              onConnect={handleConnect}
+              isConnecting={isConnecting}
+            />
+          ) : (
+            <ConnectionStatusDisplay
+              connection={state.draftRoomState.connection}
+              onDisconnect={handleDisconnect}
+              onSync={handleSync}
+            />
+          )}
           
-          <div className="flex items-center gap-2">
-            <Timer className="w-4 h-4 text-blue-500" />
-            <span className="text-sm font-medium text-gray-700">Auto-sync enabled</span>
+          {/* Draft Information Panel */}
+          <div className="bg-gradient-to-r from-blue-50 to-green-50 p-4 rounded-lg">
+            <div className="space-y-4">
+              <div>
+                <div className="font-bold text-lg text-gray-900">{state.draftSettings.draftTime}</div>
+                <div className="text-sm text-gray-600">{state.draftSettings.leagueName} League Draft • {draftSettings.timePerPick} seconds per pick</div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4 text-center">
+                <div>
+                  <div className="text-2xl font-bold text-blue-600">{state.draftSettings.totalTeams}</div>
+                  <div className="text-xs text-gray-600">Teams</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-green-600">{state.draftSettings.rounds}</div>
+                  <div className="text-xs text-gray-600">Rounds</div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-white/50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${
+                    state.draftRoomState.connection && state.draftRoomState.connection.status === 'connected'
+                      ? 'bg-green-500 animate-pulse'
+                      : 'bg-gray-400'
+                  }`}></div>
+                  <span className="text-sm font-medium text-gray-700">
+                    {state.draftRoomState.connection ? 'Live Tracking Active' : 'Ready to Connect'}
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Timer className="w-4 h-4 text-blue-500" />
+                  <span className="text-sm font-medium text-gray-700">Position {state.draftSettings.position}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
