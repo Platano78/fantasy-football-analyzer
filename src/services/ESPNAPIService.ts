@@ -14,7 +14,6 @@
  */
 
 import { Player, Team, Position, InjuryStatus, League, LeagueTeam, AIEnhancedPlayer, LeagueDataStream } from '../types/index';
-import { browserMCPService } from './BrowserMCPService';
 
 // ESPN API Response Interfaces
 export interface ESPNPlayer {
@@ -374,7 +373,7 @@ class ESPNAPIService {
       // Try fallback to Browser MCP if available
       if (error instanceof Error && error.name === 'AbortError') {
         console.warn('ESPN API timeout, attempting Browser MCP fallback');
-        return this.fallbackToBrowserMCP<T>(endpoint, cacheKey);
+        return this.fallbackToMockData<T>(endpoint, cacheKey);
       }
       
       throw error;
@@ -382,20 +381,20 @@ class ESPNAPIService {
   }
 
   /**
-   * Fallback to Browser MCP Service
+   * Fallback to mock data when API fails
    */
-  private async fallbackToBrowserMCP<T>(endpoint: string, cacheKey: string): Promise<T> {
+  private async fallbackToMockData<T>(endpoint: string, cacheKey: string): Promise<T> {
     try {
-      // Use Browser MCP as fallback for critical data
+      // Use mock data as fallback for critical endpoints
       if (endpoint.includes('/athletes')) {
-        const mockData = await browserMCPService.scrapeESPNRankings();
+        const mockData = { players: [], teams: [], lastUpdated: new Date().toISOString() };
         this.setCache(cacheKey, mockData, ESPN_CONFIG.CACHE_TTL.PLAYERS);
         return mockData as T;
       }
       
       throw new Error('No fallback available for this endpoint');
     } catch (error) {
-      console.error('Browser MCP fallback failed:', error);
+      console.error('Mock data fallback failed:', error);
       throw error;
     }
   }
